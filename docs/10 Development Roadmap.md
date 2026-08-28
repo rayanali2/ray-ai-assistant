@@ -353,19 +353,29 @@ Ray V1 is complete when:
 
 Add new domains once routing and the existing agent/tool model are solid.
 
-## Candidate domains
+## Status
 
-* **Fitness** — workout programmes, progression tracking, recovery and sleep patterns.
-* **Content creation** — drafting, editing, repurposing one piece across formats,
-  maintaining a consistent voice.
-* **Personal finance** — budgets, subscriptions, savings goals. Local-only provider
-  and stricter memory policy by default (ADR-0013, ADR-0015).
-* **Health and habits, travel planning, home/inventory** — plausible, unscoped.
+Complete. Fitness, content, and finance agents are code modules with their own tools.
+Each domain reuses the `Task` table as a lightweight local journal, so no new migration
+was required for Phase 9.
 
-## Entry criteria
+## Tasks
 
-1. Routing is reliable; a new domain must not be reached by accident.
-2. The domain needs its own tools or memory shape, not just a different system prompt.
+* [x] `fitness` agent with `fitness.log_workout`, `fitness.list_workouts`, `fitness.get_progress`
+* [x] `content` agent with `content.create_idea`, `content.list_ideas`, `content.create_draft`, `content.list_drafts`
+* [x] `finance` agent with `finance.record_transaction`, `finance.list_transactions`, `finance.get_summary`
+* [x] Domain tools registered in `ToolManager` and routed through the approval gate
+* [x] Specialist agents added to orchestrator constructor map and executive delegation prompt
+* [x] Router keyword rules for workout, content, budget/spending triggers
+* [x] Tests covering each domain tool and routing
+
+## Completion Criteria
+
+* [x] user can say "I ran 5 km" and the fitness agent logs it pending approval
+* [x] user can create content ideas/drafts and the content agent lists them
+* [x] user can record income/expenses and ask for a spending summary
+* [x] routing reaches the right specialist from natural keywords
+* [x] all backend checks pass
 
 ---
 
@@ -375,17 +385,28 @@ Add new domains once routing and the existing agent/tool model are solid.
 
 Hide the terminal/Docker/backend/frontend setup behind a one-click installable app.
 
+## Status
+
+V1 packaging complete. Ray can be installed and launched with a single command on
+macOS/Linux, and the macOS `.app` bundle builder is provided. The backend and frontend
+continue to work as a normal web deployment; the package layer only orchestrates them.
+
 ## Tasks
 
-* macOS first: bundled PostgreSQL (or embedded equivalent), auto-launch backend and
-  frontend, menu-bar presence.
-* Auto-update and signed releases.
-* Extend to Windows and Linux once the packaging and local-first data stories are solid.
+* [x] `scripts/ray` CLI: `install`, `start`, `stop`, `status`, `logs`
+* [x] `scripts/ray install` bootstraps Docker Postgres, `uv sync`, `alembic upgrade`, `seed.py`, `pnpm install`
+* [x] `scripts/ray start` launches backend + frontend, waits for health, and opens the HUD
+* [x] `scripts/build-macos-app.sh` creates a double-clickable `/Applications/Ray.app`
+* [x] `scripts/build-linux-desktop.sh` installs a `.desktop` launcher entry
+* [x] `scripts/Ray.bat` Windows launcher stub
+* [x] README quickstart updated to the one-command flow
 
-## Constraint
+## Backlog / Future
 
-The packaged app is a distribution layer, not a runtime change. The backend, frontend,
-and agent system must keep working as a normal web deployment.
+* Bundled PostgreSQL to remove the Docker dependency
+* Menu-bar / tray presence and auto-update
+* Signed, notarized macOS releases and Windows installer
+* Linux AppImage / Flatpak distribution
 
 ---
 

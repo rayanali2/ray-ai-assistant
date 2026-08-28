@@ -1,0 +1,35 @@
+#!/bin/bash
+# Launcher for the macOS Ray app bundle.
+# REPO_ROOT is replaced by build-macos-app.sh with the absolute path to the
+# ray-ai-assistant checkout, so the app can be copied to /Applications.
+
+# Finder-launched apps have a minimal PATH. Reconstruct the user's shell PATH from
+# common install locations so uv, pnpm, and node are discoverable.
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.nvm/versions/current/bin:$PATH"
+for d in "$HOME/.nvm/versions"/node/*/bin; do
+    [ -d "$d" ] && PATH="$d:$PATH"
+done
+export PATH
+
+# Also source the user's shell profile when available, because uv/pnpm may be added there.
+if [ -f "$HOME/.zshrc" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.zshrc" >/dev/null 2>&1 || true
+elif [ -f "$HOME/.bash_profile" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.bash_profile" >/dev/null 2>&1 || true
+elif [ -f "$HOME/.bashrc" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.bashrc" >/dev/null 2>&1 || true
+fi
+
+REPO_ROOT="__RAY_REPO_ROOT__"
+
+if [[ "$REPO_ROOT" == "__RAY_REPO_ROOT__" ]]; then
+    # Not installed yet; run from the source tree.
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../" && pwd)"
+fi
+
+cd "$REPO_ROOT" || exit 1
+exec ./scripts/ray start

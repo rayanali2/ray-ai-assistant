@@ -65,6 +65,33 @@ AGENTS: dict[str, AgentSpec] = {
         description="Structured investigation using memory, files, and knowledge sources.",
         tools=("memory.search", "knowledge.search", "files.read", "projects.list"),
     ),
+    "fitness": AgentSpec(
+        name="fitness",
+        display_name="Fitness Agent",
+        description="Workout logging, progression tracking, and recovery notes.",
+        tools=("fitness.log_workout", "fitness.list_workouts", "fitness.get_progress"),
+    ),
+    "content": AgentSpec(
+        name="content",
+        display_name="Content Agent",
+        description="Ideas, drafts, and repurposing content across formats.",
+        tools=(
+            "content.create_idea",
+            "content.list_ideas",
+            "content.create_draft",
+            "content.list_drafts",
+        ),
+    ),
+    "finance": AgentSpec(
+        name="finance",
+        display_name="Finance Agent",
+        description="Local budget, spending, income, and savings-goal tracking.",
+        tools=(
+            "finance.record_transaction",
+            "finance.list_transactions",
+            "finance.get_summary",
+        ),
+    ),
 }
 
 # The executive routes; it is never a routing target itself.

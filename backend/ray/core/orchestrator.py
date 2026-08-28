@@ -18,7 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ray.agents.base import AgentContext, AgentFinished, AgentToken
 from ray.agents.coding import CodingAgent
+from ray.agents.content import ContentAgent
 from ray.agents.executive import ExecutiveAgent
+from ray.agents.finance import FinanceAgent
+from ray.agents.fitness import FitnessAgent
 from ray.agents.learning import LearningAgent
 from ray.agents.planning import PlanningAgent
 from ray.agents.research import ResearchAgent
@@ -55,6 +58,9 @@ def _agent_instance(name: str, providers: ProviderRegistry) -> Any:
         "coding": CodingAgent,
         "learning": LearningAgent,
         "research": ResearchAgent,
+        "fitness": FitnessAgent,
+        "content": ContentAgent,
+        "finance": FinanceAgent,
     }
     return constructors[name](providers)
 

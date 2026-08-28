@@ -11,7 +11,16 @@ from ray.services import agent_service
 
 
 def test_registry_contains_the_specified_agents() -> None:
-    assert set(AGENTS) == {"executive", "planning", "coding", "learning", "research"}
+    assert set(AGENTS) == {
+        "executive",
+        "planning",
+        "coding",
+        "learning",
+        "research",
+        "fitness",
+        "content",
+        "finance",
+    }
     # The executive routes; routing to itself would be a loop.
     assert "executive" not in ROUTABLE_AGENTS
 

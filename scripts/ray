@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""One-click install and run script for Ray.
+
+Usage:
+    ./scripts/ray install         # install deps, database, and seed data
+    ./scripts/ray start           # start backend + frontend (postgres first)
+    ./scripts/ray stop            # stop backend + frontend
+    ./scripts/ray status          # show running services and health
+    ./scripts/ray logs            # tail the last 40 lines of each service
+
+This is intentionally dependency-free: it uses only the Python standard library,
+so it works on macOS and Linux with uv + pnpm + Docker already installed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import platform
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BACKEND = REPO_ROOT / "backend"
+FRONTEND = REPO_ROOT / "frontend"
+RAY_DIR = REPO_ROOT / ".ray"
+PID_FILE = RAY_DIR / "pids"
+LOG_FILE = RAY_DIR / "ray.log"
+
+DEFAULT_DB = "postgresql+asyncpg://ray:ray@localhost:5433/ray"
+
+
+def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+    """Run a shell command and stream output."""
+    print(f"$ {' '.join(cmd)}")
+    return subprocess.run(cmd, cwd=cwd, check=check, text=True)
+
+
+def _run_bg(cmd: list[str], cwd: Path, log: Path) -> subprocess.Popen[str]:
+    """Start a background process and record its PID.
+
+    The new process becomes a session leader so the whole tree can be stopped with
+    `os.killpg` later.
+    """
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a") as fh:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+    return proc
+
+
+def _service_port(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1)
+        return sock.connect_ex((host, port)) == 0
+
+
+def _health(api_url: str = "http://127.0.0.1:8000/health") -> bool:
+    try:
+        subprocess.run(["curl", "-fs", api_url], check=True, capture_output=True, text=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return _service_port("127.0.0.1", 8000)
+
+
+def _require(cmd: str, instructions: str) -> str:
+    path = shutil.which(cmd)
+    if not path:
+        print(f"ERROR: '{cmd}' not found in PATH.\n{instructions}")
+        sys.exit(1)
+    return path
+
+
+def _ensure_env() -> None:
+    env_file = REPO_ROOT / ".env"
+    if not env_file.exists():
+        example = REPO_ROOT / ".env.example"
+        if example.exists():
+            shutil.copy(example, env_file)
+            print("Created .env from .env.example. Edit it before production use.")
+        else:
+            print("WARNING: no .env.example found; creating a minimal .env")
+            env_file.write_text(
+                f"RAY_API_TOKEN=dev-token-{os.urandom(8).hex()}\n"
+                f"RAY_DATABASE_URL={DEFAULT_DB}\n"
+                "RAY_LLM_PROVIDER=ollama\n"
+                "RAY_LLM_FALLBACK_PROVIDER=mock\n"
+                "RAY_USER_NAME=Ray User\n",
+                encoding="utf-8",
+            )
+
+
+def _ensure_postgres() -> None:
+    """Start the ray-postgres Docker container if it is not already running."""
+    _require(
+        "docker",
+        "Install Docker Desktop (macOS) or docker.io (Linux): https://docs.docker.com/get-docker/",
+    )
+    running = subprocess.run(
+        ["docker", "ps", "-q", "-f", "name=ray-postgres"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if running:
+        print("Postgres container 'ray-postgres' already running.")
+        return
+
+    print("Starting Postgres container 'ray-postgres' on port 5433...")
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            "ray-postgres",
+            "-e",
+            "POSTGRES_USER=ray",
+            "-e",
+            "POSTGRES_PASSWORD=ray",
+            "-e",
+            "POSTGRES_DB=ray",
+            "-p",
+            "5433:5432",
+            "pgvector/pgvector:pg16",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 and "already in use" in result.stderr:
+        print("Container exists but is stopped; starting it...")
+        subprocess.run(["docker", "start", "ray-postgres"], check=True)
+    elif result.returncode != 0:
+        print(f"ERROR: failed to start Postgres container:\n{result.stderr}")
+        sys.exit(1)
+
+    # Wait for Postgres to accept connections.
+    for _ in range(30):
+        check = subprocess.run(
+            ["docker", "exec", "ray-postgres", "pg_isready", "-U", "ray"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if check.returncode == 0:
+            print("Postgres is ready.")
+            return
+        time.sleep(1)
+    print("ERROR: Postgres did not become ready in 30 seconds.")
+    sys.exit(1)
+
+
+def _install(args: argparse.Namespace) -> None:
+    _require(
+        "uv",
+        "Install uv: https://docs.astral.sh/uv/",
+    )
+    _require(
+        "pnpm",
+        "Install pnpm: https://pnpm.io/installation",
+    )
+    _require(
+        "node",
+        "Install Node.js LTS: https://nodejs.org/",
+    )
+
+    _ensure_env()
+    _ensure_postgres()
+
+    print("\nInstalling backend dependencies...")
+    _run(["uv", "sync"], cwd=BACKEND)
+
+    print("\nRunning database migrations...")
+    _run(["uv", "run", "alembic", "upgrade", "head"], cwd=BACKEND)
+
+    print("\nSeeding default user and sample data...")
+    _run(["uv", "run", "python", "scripts/seed.py"], cwd=BACKEND, check=False)
+
+    print("\nInstalling frontend dependencies...")
+    _run(["pnpm", "install"], cwd=FRONTEND)
+
+    if args.voice:
+        print("\nDownloading optional voice models...")
+        _run(["uv", "run", "python", "scripts/download_voice_models.py"], cwd=BACKEND, check=False)
+
+    print("\nInstall complete. Run './scripts/ray start' to launch Ray.")
+
+
+def _start(args: argparse.Namespace) -> None:
+    _ensure_postgres()
+    RAY_DIR.mkdir(exist_ok=True)
+
+    # Read PID state; if services are already running, just print URLs.
+    pids: dict[str, int] = {}
+    if PID_FILE.exists():
+        for line in PID_FILE.read_text().strip().splitlines():
+            name, _, pid = line.partition("\t")
+            if name and pid.isdigit():
+                pids[name] = int(pid)
+            elif name:
+                print(f"WARNING: stale PID entry '{line}' ignored.")
+
+    # Build backend command.
+    host = os.environ.get("RAY_HOST", "127.0.0.1")
+    port = int(os.environ.get("RAY_PORT", "8000"))
+    backend_cmd = ["uv", "run", "uvicorn", "ray.main:app", "--host", host, "--port", str(port)]
+    if os.environ.get("RAY_ENV") == "development":
+        backend_cmd.append("--reload")
+
+    frontend_cmd = ["pnpm", "dev"]
+
+    if "backend" not in pids or not _service_port(host, port):
+        print("Starting backend...")
+        backend_proc = _run_bg(backend_cmd, BACKEND, LOG_FILE)
+        pids["backend"] = backend_proc.pid
+    else:
+        print("Backend already running.")
+
+    if "frontend" not in pids or not _service_port("127.0.0.1", 3000):
+        print("Starting frontend...")
+        frontend_proc = _run_bg(frontend_cmd, FRONTEND, LOG_FILE)
+        pids["frontend"] = frontend_proc.pid
+    else:
+        print("Frontend already running.")
+
+    PID_FILE.write_text("\n".join(f"{k}\t{v}" for k, v in pids.items()))
+
+    # Wait for backend health.
+    for _ in range(60):
+        if _health():
+            break
+        time.sleep(0.5)
+    else:
+        print("WARNING: backend did not respond to /health. Check logs with './scripts/ray logs'")
+
+    print(f"\nRay is starting at:")
+    print(f"  Frontend: http://127.0.0.1:3000")
+    print(f"  Backend:  http://{host}:{port}")
+    if not args.no_browser:
+        url = "http://127.0.0.1:3000"
+        if platform.system() == "Darwin":
+            subprocess.run(["open", url], check=False)
+        elif platform.system() == "Linux":
+            subprocess.run(["xdg-open", url], check=False)
+
+
+def _stop(args: argparse.Namespace) -> None:
+    if not PID_FILE.exists():
+        print("No PID file found; services may not be running.")
+        return
+    for line in PID_FILE.read_text().strip().splitlines():
+        name, _, pid = line.partition("\t")
+        if pid.isdigit():
+            pid_int = int(pid)
+            try:
+                os.killpg(os.getpgid(pid_int), 15)
+                print(f"Stopped {name} (pid {pid})")
+            except (ProcessLookupError, OSError):
+                print(f"{name} (pid {pid}) was not running.")
+    PID_FILE.unlink(missing_ok=True)
+    if args.postgres:
+        subprocess.run(["docker", "stop", "ray-postgres"], check=False)
+        print("Stopped postgres container.")
+
+
+def _status(args: argparse.Namespace) -> None:
+    backend_ok = _service_port("127.0.0.1", 8000)
+    frontend_ok = _service_port("127.0.0.1", 3000)
+    postgres_ok = _service_port("127.0.0.1", 5433)
+    health_ok = _health() if backend_ok else False
+    print(f"Backend  (8000): {'running' if backend_ok else 'stopped'} {'(healthy)' if health_ok else ''}")
+    print(f"Frontend (3000): {'running' if frontend_ok else 'stopped'}")
+    print(f"Postgres (5433): {'running' if postgres_ok else 'stopped'}")
+
+
+def _logs(args: argparse.Namespace) -> None:
+    if not LOG_FILE.exists():
+        print("No log file found.")
+        return
+    lines = int(args.lines) if isinstance(args, argparse.Namespace) and hasattr(args, "lines") else 40
+    subprocess.run(["tail", "-n", str(lines), str(LOG_FILE)])
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Ray install/run helper")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    install = sub.add_parser("install", help="install dependencies and prepare the database")
+    install.add_argument("--voice", action="store_true", help="download optional voice models")
+    install.set_defaults(func=_install)
+
+    start = sub.add_parser("start", help="start backend and frontend")
+    start.add_argument("--no-browser", action="store_true", help="do not open the browser")
+    start.set_defaults(func=_start)
+
+    stop = sub.add_parser("stop", help="stop backend and frontend")
+    stop.add_argument("--postgres", action="store_true", help="also stop the postgres container")
+    stop.set_defaults(func=_stop)
+
+    status = sub.add_parser("status", help="show running services")
+    status.set_defaults(func=_status)
+
+    logs = sub.add_parser("logs", help="tail service logs")
+    logs.add_argument("--lines", default="40", help="number of lines to show")
+    logs.set_defaults(func=_logs)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
