@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Ray
+Comment=Personal AI assistant HUD
+Exec=__RAY_REPO_ROOT__/scripts/ray start
+Type=Application
+Terminal=true
+Categories=Utility;

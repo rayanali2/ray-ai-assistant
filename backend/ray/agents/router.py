@@ -37,6 +37,9 @@ _KEYWORD_RULES: list[tuple[tuple[str, ...], str]] = [
     (("debug", "code", "programming", "bug", "error", "function", "class", "refactor"), "coding"),
     (("schedule", "plan", "week", "deadline", "calendar", "blocked"), "planning"),
     (("research", "find out", "look up", "what does", "how does"), "research"),
+    (("workout", "gym", "exercise", "run", "training", "fitness"), "fitness"),
+    (("draft", "content", "post", "blog", "tweet", "thread", "video script"), "content"),
+    (("budget", "spend", "expense", "income", "money", "finance", "transaction"), "finance"),
 ]
 
 

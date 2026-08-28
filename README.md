@@ -6,12 +6,12 @@ already lives in — calendar, GitHub, notes, and local files.
 
 Ray is built for one person, runs locally, and costs nothing to operate.
 
-> **Status: Phase 8 — self improvement and hardening.** Phases 1–7 (foundation,
-> conversation, memory, agents, productivity/integrations, voice hardening, advanced
-> dashboard) are merged. Ray now has structured logging with secret redaction, a
-> self-diagnosis endpoint, an improvement-task capture flow, a settings UI for profile and
-> preferences, full JSON data export, and release-tagging automation. See the
-> [roadmap](docs/10%20Development%20Roadmap.md) and [`/docs/adr`](docs/adr/) for details.
+> **Status: Phase 9–10 complete.** Phases 1–8 (foundation, conversation, memory,
+> agents, productivity/integrations, voice hardening, advanced dashboard, self-improvement)
+> are merged. Ray now has specialist agents for fitness, content, and finance; an
+> orchestrator that routes to them; a single-command install/run script; and a macOS
+> `.app` bundle builder. See the [roadmap](docs/10%20Development%20Roadmap.md) and
+> [`/docs/adr`](docs/adr/) for details.
 
 ---
 
@@ -25,6 +25,9 @@ Ray is built for one person, runs locally, and costs nothing to operate.
 | **Coding mentorship** | Understands active projects and teaches rather than replacing the user's work |
 | **Learning** | Explains, quizzes, tracks proficiency, and adapts depth accordingly |
 | **Research** | Turns open-ended curiosity into structured, actionable plans |
+| **Fitness** | Logs workouts, tracks progress, and flags recovery notes |
+| **Content** | Captures ideas, drafts posts, and repurposes across formats |
+| **Finance** | Tracks income/expenses and summarises spending locally |
 | **Transparency** | Always reports which agent, tools, and memories produced an answer |
 
 ---
@@ -42,8 +45,8 @@ Ray is built for one person, runs locally, and costs nothing to operate.
              │
       Executive Agent         routes to one specialist by default
              │
-  ┌──────────┼──────────┬──────────┐
-Planning  Coding    Learning   Research      (code modules, not DB rows)
+  ┌──────────┼──────────┼──────────┬──────────┬──────────┬──────────┐
+Planning  Coding  Learning  Research  Fitness  Content  Finance  (code modules)
              │
        Tool Manager           permissions, approval gate, error handling
              │
@@ -89,18 +92,27 @@ cd ray-ai-assistant
 
 cp .env.example .env          # then set RAY_API_TOKEN and your LLM key
 
-docker compose up -d          # PostgreSQL + pgvector
-
-cd backend && uv sync && uv run alembic upgrade head && uv run python scripts/seed.py
-uv run uvicorn ray.main:app --reload      # http://127.0.0.1:8000
-
-cd ../frontend && pnpm install
-cp ../.env .env.local                      # the frontend reads the token server-side
-pnpm dev                                   # http://localhost:3000
+./scripts/ray install         # dependencies, Postgres, migrations, seed data
+./scripts/ray start           # opens http://localhost:3000
 ```
 
 Open http://localhost:3000 and the dashboard shows the seeded project, tasks, schedule,
-memories, and agents.
+memories, and agents. Control the running services with `status`, `stop`, and `logs`.
+
+### macOS app bundle
+
+```bash
+./scripts/build-macos-app.sh     # creates /Applications/Ray.app
+```
+
+Run it from Launchpad or Finder; it starts the backend and opens the HUD. The app bundle
+references this checkout, so keep the repo in place or rebuild the app after moving it.
+
+### Linux desktop entry
+
+```bash
+./scripts/build-linux-desktop.sh
+```
 
 ### Choosing a model
 
