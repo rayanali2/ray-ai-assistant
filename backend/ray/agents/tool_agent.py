@@ -76,7 +76,7 @@ class ToolUsingAgent(Agent, ABC):
             )
 
             try:
-                completion = await self._providers.complete(request)
+                completion = await self._providers.complete(request, on_degrade=self._on_degrade)
             except Exception:
                 # Tool-calling unavailable: the agent still tries to answer from context.
                 conversation.append(LLMMessage(role="user", content="(Tool lookup failed.)"))
@@ -99,6 +99,15 @@ class ToolUsingAgent(Agent, ABC):
                     yield AgentToken(text=content)
                     yield AgentFinished(content=content, speech_text=to_speech(content))
                     return
+
+        # If no tools were needed and the model already answered, skip the second
+        # model call. This avoids the extra latency of a separate final-stream
+        # request for simple greetings/questions.
+        if not conversation and not completion.tool_calls and completion.text:
+            content = completion.text
+            yield AgentToken(text=content)
+            yield AgentFinished(content=content, speech_text=to_speech(content))
+            return
 
         # Final streaming answer; no tools offered, so the response is prose.
         final_request = CompletionRequest(

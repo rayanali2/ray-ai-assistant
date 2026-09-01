@@ -48,7 +48,12 @@ def _build(name: ProviderName, settings: Settings) -> LLMProvider:
             raise ProviderUnavailableError("RAY_GEMINI_API_KEY is not set", provider="gemini")
         from ray.llm.providers.gemini import GeminiProvider
 
-        return GeminiProvider(settings.gemini_api_key, model=settings.gemini_model)
+        return GeminiProvider(
+            settings.gemini_api_key,
+            model=settings.gemini_model,
+            timeout_ms=settings.gemini_timeout_ms,
+            retry_attempts=settings.gemini_retry_attempts,
+        )
     if name == "ollama":
         from ray.llm.providers.ollama import OllamaProvider
 

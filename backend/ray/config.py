@@ -52,7 +52,12 @@ class Settings(BaseSettings):
     # Provider credentials and models. The key is a secret: it is read from the
     # environment, never logged, and never written to the database.
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-flash-latest"
+    gemini_model: str = "gemini-3.6-flash"
+    # Bounds on a single Gemini request. The registry fallback chain handles
+    # retries across providers; long SDK retries against an overloaded endpoint
+    # are what cause 60-90 second chat hangs.
+    gemini_timeout_ms: int = 15_000
+    gemini_retry_attempts: int = 1
     ollama_host: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2"
     # Slows the mock stream so streaming is visible during development.
