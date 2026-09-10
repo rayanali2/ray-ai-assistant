@@ -52,6 +52,8 @@ export type VoiceCapabilities = Schemas["VoiceCapabilities"];
 export type Health = Schemas["HealthResponse"];
 export type ConversationSummary = Schemas["ConversationSummary"];
 export type Conversation = Schemas["ConversationRead"];
+export type Workflow = Schemas["WorkflowRead"];
+export type WorkflowRun = Schemas["WorkflowRunRead"];
 export type TaskStatus = Task["status"];
 export type TaskPriority = Task["priority"];
 
@@ -126,4 +128,36 @@ export async function getHealth(): Promise<Health | null> {
   } catch {
     return null;
   }
+}
+
+export const getWorkflows = () => request<Workflow[]>("/workflows");
+
+export async function createWorkflow(
+  data: Schemas["WorkflowCreate"],
+): Promise<Workflow> {
+  const response = await fetch(`${API_URL}/workflows`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new ApiError("POST /workflows failed", response.status);
+  }
+  return (await response.json()) as Workflow;
+}
+
+export async function runWorkflow(workflowId: string): Promise<Schemas["WorkflowRunSummary"]> {
+  const response = await fetch(`${API_URL}/workflows/${workflowId}/run`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${API_TOKEN}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new ApiError(`POST /workflows/${workflowId}/run failed`, response.status);
+  }
+  return (await response.json()) as Schemas["WorkflowRunSummary"];
 }

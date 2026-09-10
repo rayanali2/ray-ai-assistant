@@ -271,9 +271,10 @@ _manager: ToolManager | None = None
 
 
 def get_manager() -> ToolManager:
-    """The process-wide manager, with the internal and integration tools registered."""
+    """The process-wide manager, with internal, integration, domain, and skill tools registered."""
     global _manager
     if _manager is None:
+        from ray.skills.builtin import load_builtin_skills
         from ray.tools.domain_tools import DOMAIN_TOOLS
         from ray.tools.integration_tools import INTEGRATION_TOOLS
         from ray.tools.internal import INTERNAL_TOOLS
@@ -285,4 +286,5 @@ def get_manager() -> ToolManager:
             _manager.register(tool)
         for tool in DOMAIN_TOOLS:
             _manager.register(tool)
+        load_builtin_skills(_manager)
     return _manager

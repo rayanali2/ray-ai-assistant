@@ -7,6 +7,8 @@ Usage:
     ./scripts/ray stop            # stop backend + frontend
     ./scripts/ray status          # show running services and health
     ./scripts/ray logs            # tail the last 40 lines of each service
+    ./scripts/ray doctor          # check dependencies and runtime readiness
+    ./scripts/ray init --preset local|gemini|fast [--name "Your Name"]
 
 This is intentionally dependency-free: it uses only the Python standard library,
 so it works on macOS and Linux with uv + pnpm + Docker already installed.
@@ -30,8 +32,31 @@ FRONTEND = REPO_ROOT / "frontend"
 RAY_DIR = REPO_ROOT / ".ray"
 PID_FILE = RAY_DIR / "pids"
 LOG_FILE = RAY_DIR / "ray.log"
+ENV_FILE = REPO_ROOT / ".env"
 
 DEFAULT_DB = "postgresql+asyncpg://ray:ray@localhost:5433/ray"
+
+PRESETS: dict[str, dict[str, str]] = {
+    "local": {
+        "RAY_LLM_PROVIDER": "ollama",
+        "RAY_LLM_FALLBACK_PROVIDER": "mock",
+        "RAY_EMBEDDINGS_PROVIDER": "hash",
+    },
+    "gemini": {
+        "RAY_LLM_PROVIDER": "gemini",
+        "RAY_LLM_FALLBACK_PROVIDER": "ollama,mock",
+        "RAY_GEMINI_MODEL": "gemini-3.6-flash",
+        "RAY_EMBEDDINGS_PROVIDER": "sentence-transformers",
+    },
+    "fast": {
+        "RAY_LLM_PROVIDER": "gemini",
+        "RAY_LLM_FALLBACK_PROVIDER": "mock",
+        "RAY_GEMINI_MODEL": "gemini-3.6-flash",
+        "RAY_GEMINI_TIMEOUT_MS": "15000",
+        "RAY_GEMINI_RETRY_ATTEMPTS": "1",
+        "RAY_EMBEDDINGS_PROVIDER": "sentence-transformers",
+    },
+}
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -81,23 +106,37 @@ def _require(cmd: str, instructions: str) -> str:
     return path
 
 
+def _read_env() -> dict[str, str]:
+    env: dict[str, str] = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text().splitlines():
+            if line.strip() and "=" in line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                env[key] = value.strip().strip('"')
+    return env
+
+
+def _write_env(env: dict[str, str]) -> None:
+    ENV_FILE.write_text("\n".join(f"{k}={v}" for k, v in env.items()) + "\n", encoding="utf-8")
+
+
 def _ensure_env() -> None:
-    env_file = REPO_ROOT / ".env"
-    if not env_file.exists():
+    env = _read_env()
+    if not env:
         example = REPO_ROOT / ".env.example"
         if example.exists():
-            shutil.copy(example, env_file)
+            shutil.copy(example, ENV_FILE)
             print("Created .env from .env.example. Edit it before production use.")
         else:
             print("WARNING: no .env.example found; creating a minimal .env")
-            env_file.write_text(
-                f"RAY_API_TOKEN=dev-token-{os.urandom(8).hex()}\n"
-                f"RAY_DATABASE_URL={DEFAULT_DB}\n"
-                "RAY_LLM_PROVIDER=ollama\n"
-                "RAY_LLM_FALLBACK_PROVIDER=mock\n"
-                "RAY_USER_NAME=Ray User\n",
-                encoding="utf-8",
-            )
+            env = {
+                "RAY_API_TOKEN": f"dev-token-{os.urandom(8).hex()}",
+                "RAY_DATABASE_URL": DEFAULT_DB,
+                "RAY_LLM_PROVIDER": "ollama",
+                "RAY_LLM_FALLBACK_PROVIDER": "mock",
+                "RAY_USER_NAME": "Ray User",
+            }
+            _write_env(env)
 
 
 def _ensure_postgres() -> None:
@@ -288,8 +327,84 @@ def _logs(args: argparse.Namespace) -> None:
     if not LOG_FILE.exists():
         print("No log file found.")
         return
-    lines = int(args.lines) if isinstance(args, argparse.Namespace) and hasattr(args, "lines") else 40
+    lines = int(args.lines)
     subprocess.run(["tail", "-n", str(lines), str(LOG_FILE)])
+
+
+def _doctor(args: argparse.Namespace) -> None:  # noqa: ARG001
+    """Check dependencies, configuration, and runtime readiness."""
+    checks: list[tuple[str, bool, str]] = []
+
+    checks.append(("uv", shutil.which("uv") is not None, "Install from https://docs.astral.sh/uv/"))
+    checks.append(("pnpm", shutil.which("pnpm") is not None, "Install from https://pnpm.io/installation"))
+    checks.append(("node", shutil.which("node") is not None, "Install Node.js LTS from https://nodejs.org/"))
+    checks.append(("docker", shutil.which("docker") is not None, "Install Docker: https://docs.docker.com/get-docker/"))
+
+    env = _read_env()
+    checks.append((".env exists", ENV_FILE.exists(), "Run './scripts/ray init --preset local' to create one"))
+    checks.append(("RAY_API_TOKEN", bool(env.get("RAY_API_TOKEN")), "Add RAY_API_TOKEN to .env"))
+    checks.append(("RAY_DATABASE_URL", bool(env.get("RAY_DATABASE_URL")), "Add RAY_DATABASE_URL to .env"))
+
+    provider = env.get("RAY_LLM_PROVIDER", "").lower()
+    if provider == "gemini":
+        checks.append(("GEMINI_API_KEY", bool(env.get("GEMINI_API_KEY") or env.get("RAY_GEMINI_API_KEY")), "Set RAY_GEMINI_API_KEY for Gemini"))
+    elif provider == "ollama":
+        ollama_ok = _service_port("127.0.0.1", 11434)
+        checks.append(("Ollama (11434)", ollama_ok, "Start Ollama or switch preset: ./scripts/ray init --preset gemini"))
+
+    postgres_ok = _service_port("127.0.0.1", 5433)
+    checks.append(("Postgres (5433)", postgres_ok, "Run './scripts/ray install' to start Postgres"))
+
+    backend_ok = _service_port("127.0.0.1", 8000)
+    health_ok = _health() if backend_ok else False
+    checks.append(("Backend (8000)", backend_ok, "Run './scripts/ray start'"))
+    checks.append(("Backend health", health_ok, "Backend is reachable but /health failed; check logs"))
+
+    frontend_ok = _service_port("127.0.0.1", 3000)
+    checks.append(("Frontend (3000)", frontend_ok, "Run './scripts/ray start'"))
+
+    max_name = max(len(name) for name, _, _ in checks)
+    print("\nRay doctor\n" + "-" * (max_name + 20))
+    all_ok = True
+    for name, ok, fix in checks:
+        status = "OK" if ok else "FAIL"
+        print(f"{name:<{max_name}}  {status}")
+        if not ok:
+            print(f"  → {fix}")
+            all_ok = False
+    print("-" * (max_name + 20))
+    sys.exit(0 if all_ok else 1)
+
+
+def _init(args: argparse.Namespace) -> None:
+    """Create or update .env from a preset configuration."""
+    preset = PRESETS.get(args.preset)
+    if preset is None:
+        print(f"Unknown preset '{args.preset}'. Choose one of: {', '.join(PRESETS)}")
+        sys.exit(1)
+
+    if ENV_FILE.exists() and not args.force:
+        existing = _read_env()
+        if existing.get("RAY_LLM_PROVIDER"):
+            print(f".env already exists. Use --force to overwrite with the '{args.preset}' preset.")
+            sys.exit(1)
+
+    env = {
+        "RAY_API_TOKEN": f"dev-token-{os.urandom(8).hex()}",
+        "RAY_DATABASE_URL": DEFAULT_DB,
+        "RAY_USER_NAME": args.name,
+        **preset,
+    }
+
+    # Preserve an existing Gemini key when switching presets.
+    existing = _read_env()
+    for key in ("GEMINI_API_KEY", "RAY_GEMINI_API_KEY"):
+        if key in existing:
+            env[key] = existing[key]
+
+    _write_env(env)
+    print(f"Created .env with the '{args.preset}' preset for user '{args.name}'.")
+    print("Edit .env if you need to add API keys or adjust providers.")
 
 
 def main() -> None:
@@ -314,6 +429,15 @@ def main() -> None:
     logs = sub.add_parser("logs", help="tail service logs")
     logs.add_argument("--lines", default="40", help="number of lines to show")
     logs.set_defaults(func=_logs)
+
+    doctor = sub.add_parser("doctor", help="check dependencies and runtime readiness")
+    doctor.set_defaults(func=_doctor)
+
+    init = sub.add_parser("init", help="create .env from a preset")
+    init.add_argument("--preset", choices=list(PRESETS), default="local", help="configuration preset")
+    init.add_argument("--name", default="Ray User", help="your name, used by Ray in conversation")
+    init.add_argument("--force", action="store_true", help="overwrite an existing .env")
+    init.set_defaults(func=_init)
 
     args = parser.parse_args()
     args.func(args)

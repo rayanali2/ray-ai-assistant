@@ -697,6 +697,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows */
+        get: operations["list_workflows_workflows_get"];
+        put?: never;
+        /** Create Workflow */
+        post: operations["create_workflow_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow */
+        get: operations["get_workflow_workflows__workflow_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Workflow */
+        delete: operations["delete_workflow_workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Workflow */
+        patch: operations["update_workflow_workflows__workflow_id__patch"];
+        trace?: never;
+    };
+    "/workflows/{workflow_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Workflow */
+        post: operations["run_workflow_workflows__workflow_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -918,6 +972,11 @@ export interface components {
             tool_permissions: components["schemas"]["ToolPermissionRead"][];
             /** Conversations */
             conversations: components["schemas"]["ConversationRead"][];
+            /**
+             * Workflows
+             * @default []
+             */
+            workflows: components["schemas"]["WorkflowRead"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1463,6 +1522,153 @@ export interface components {
              * @default
              */
             local_detail: string;
+        };
+        /** WorkflowCreate */
+        WorkflowCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Agent
+             * @default executive
+             */
+            agent: string;
+            /** Prompt */
+            prompt: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Interval Minutes
+             * @default 60
+             */
+            interval_minutes: number;
+        };
+        /** WorkflowRead */
+        WorkflowRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Agent */
+            agent: string;
+            /** Prompt */
+            prompt: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Interval Minutes */
+            interval_minutes: number;
+            /** Last Run At */
+            last_run_at: string | null;
+            /**
+             * Next Run At
+             * Format: date-time
+             */
+            next_run_at: string;
+            /**
+             * Runs
+             * @default []
+             */
+            runs: components["schemas"]["WorkflowRunRead"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** WorkflowRunRead */
+        WorkflowRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /** Success */
+            success: boolean | null;
+            /** Output */
+            output: string;
+            /** Error */
+            error: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * WorkflowRunSummary
+         * @description Result of a manual or scheduled workflow run.
+         */
+        WorkflowRunSummary: {
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Success */
+            success: boolean;
+            /** Output */
+            output: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+        };
+        /** WorkflowUpdate */
+        WorkflowUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Agent */
+            agent?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Interval Minutes */
+            interval_minutes?: number | null;
+            /** Next Run At */
+            next_run_at?: string | null;
         };
     };
     responses: never;
@@ -2880,6 +3086,185 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExportSnapshot"];
+                };
+            };
+        };
+    };
+    list_workflows_workflows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRead"][];
+                };
+            };
+        };
+    };
+    create_workflow_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_workflows__workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workflow_workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_workflows__workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_workflow_workflows__workflow_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

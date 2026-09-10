@@ -39,6 +39,7 @@ export function StatusBar() {
         <NavLink href="/projects">Projects</NavLink>
         <NavLink href="/tasks">Tasks</NavLink>
         <NavLink href="/calendar">Calendar</NavLink>
+        <NavLink href="/workflows">Workflows</NavLink>
         <NavLink href="/memory">Memory</NavLink>
         <NavLink href="/settings">Settings</NavLink>
       </nav>

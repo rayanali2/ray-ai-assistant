@@ -400,6 +400,37 @@ continue to work as a normal web deployment; the package layer only orchestrates
 * [x] `scripts/build-linux-desktop.sh` installs a `.desktop` launcher entry
 * [x] `scripts/Ray.bat` Windows launcher stub
 * [x] README quickstart updated to the one-command flow
+* [x] `scripts/ray doctor` and `scripts/ray init --preset` for quick onboarding
+* [x] `install.sh` / `install.ps1` one-liner entry points
+
+## Completion Criteria
+
+* [x] one command installs deps, starts Postgres, migrates, seeds, and launches the HUD
+* [x] macOS `.app` and Linux `.desktop` launchers are generated from the repo
+
+---
+
+# Phase 11 — JARVIS Finish
+
+## Goal
+
+Polish Ray into a cohesive personal assistant: JARVIS-style personality, broad free
+built-in skills, autonomous scheduled workflows, and a refined install/desktop experience.
+
+## Status
+
+Complete. All features are merged into `main`.
+
+## Tasks
+
+* [x] JARVIS-style wit and sign-offs injected into the executive prompt
+* [x] Built-in utility skills: time/date, weather, news, web search, Wikipedia, dictionary, calculator
+* [x] Built-in system skills: system info, open URL with approval
+* [x] Autonomous scheduled workflows (`Workflow`/`WorkflowRun`) with a background scheduler
+* [x] Workflows UI for create/edit/run/inspect in the dashboard
+* [x] `scripts/ray doctor` and `scripts/ray init --preset` onboarding commands
+* [x] `install.sh` / `install.ps1` one-liner entry points
+* [x] macOS `.app` icon resource and `CFBundleIconFile`
 
 ## Backlog / Future
 
@@ -407,6 +438,9 @@ continue to work as a normal web deployment; the package layer only orchestrates
 * Menu-bar / tray presence and auto-update
 * Signed, notarized macOS releases and Windows installer
 * Linux AppImage / Flatpak distribution
+* "Ray" and "Jarvis" wake-word aliases with per-alias confirmation tones
+* Cinematic Iron Man/JARVIS reactor-style HUD polish (ambient glow, voice-driven visual state)
+* Future specialized agents/workflows for fitness, content creation, personal finance, and other productivity domains
 
 ---
 

@@ -8,12 +8,14 @@ import {
   ProjectPanel,
   SchedulePanel,
   TaskPanel,
+  WorkflowPanel,
 } from "@/components/panels";
 import { StatusBar } from "@/components/status-bar";
 import {
   getDashboard,
   getHealth,
   getRecentConversation,
+  getWorkflows,
   type DashboardSummary,
   type Health,
 } from "@/lib/api";
@@ -21,10 +23,11 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [health, dashboard, conversation] = await Promise.all([
+  const [health, dashboard, conversation, workflows] = await Promise.all([
     getHealth(),
     safeDashboard(),
     getRecentConversation(),
+    getWorkflows().catch(() => []),
   ]);
 
   if (dashboard === null) {
@@ -48,12 +51,13 @@ export default async function DashboardPage() {
           />
 
           {/* The panel rail: everything Ray knows, always visible (docs/09). */}
-          <aside className="grid min-h-0 grid-rows-[1.2fr_0.8fr_0.8fr_1.2fr_0.8fr_0.8fr] gap-4 overflow-y-auto">
+          <aside className="grid min-h-0 grid-rows-[1.2fr_0.8fr_0.8fr_1.2fr_0.8fr_0.8fr_0.8fr] gap-4 overflow-y-auto">
             <TaskPanel tasks={dashboard.tasks} overdue={dashboard.overdue_count} />
             <SchedulePanel events={dashboard.today_events} />
             <ProjectPanel projects={dashboard.projects} />
             <MemoryPanel memories={dashboard.memories} />
             <LearningPanel memories={dashboard.memories} />
+            <WorkflowPanel workflows={workflows} />
             <AgentPanel agents={dashboard.agents} />
           </aside>
         </div>

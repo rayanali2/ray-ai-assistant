@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { Agent, CalendarEvent, Memory, Project, Task } from "@/lib/api";
+import type { Agent, CalendarEvent, Memory, Project, Task, Workflow } from "@/lib/api";
 
 import { Count, EmptyState, Panel } from "@/components/panel";
 
@@ -259,6 +259,52 @@ export function AgentPanel({ agents }: { agents: Agent[] }) {
               <span className="font-mono text-[10px] text-hud-muted">
                 {agent.tools.length} tools
               </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+export function WorkflowPanel({ workflows }: { workflows: Workflow[] }) {
+  const active = workflows.filter((w) => w.enabled).length;
+
+  return (
+    <Panel
+      title="Workflows"
+      badge={
+        <span className="flex items-center gap-2">
+          <Count value={active} />
+          <Link
+            href="/workflows"
+            className="text-[10px] uppercase tracking-widest text-hud-muted hover:text-hud-accent"
+          >
+            Manage
+          </Link>
+        </span>
+      }
+    >
+      {workflows.length === 0 ? (
+        <EmptyState>Ray has no scheduled workflows.</EmptyState>
+      ) : (
+        <ul className="space-y-2.5">
+          {workflows.slice(0, 5).map((workflow) => (
+            <li key={workflow.id} className="text-sm">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      workflow.enabled ? "bg-hud-accent" : "bg-hud-muted"
+                    }`}
+                  />
+                  <span className="text-hud-text">{workflow.name}</span>
+                </span>
+                <span className="font-mono text-[10px] text-hud-muted">
+                  {workflow.interval_minutes}m
+                </span>
+              </div>
+              <p className="mt-0.5 line-clamp-2 text-[11px] text-hud-muted">{workflow.prompt}</p>
             </li>
           ))}
         </ul>
