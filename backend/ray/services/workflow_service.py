@@ -68,9 +68,7 @@ async def create_workflow(
     session.add(workflow)
     await session.flush()
     result = await session.execute(
-        select(Workflow)
-        .options(selectinload(Workflow.runs))
-        .where(Workflow.id == workflow.id)
+        select(Workflow).options(selectinload(Workflow.runs)).where(Workflow.id == workflow.id)
     )
     return result.scalar_one()
 
@@ -98,9 +96,7 @@ async def update_workflow(
 
     await session.flush()
     result = await session.execute(
-        select(Workflow)
-        .options(selectinload(Workflow.runs))
-        .where(Workflow.id == workflow.id)
+        select(Workflow).options(selectinload(Workflow.runs)).where(Workflow.id == workflow.id)
     )
     return result.scalar_one()
 
