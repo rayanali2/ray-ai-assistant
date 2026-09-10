@@ -22,8 +22,10 @@ from ray.api.routes import (
     tools,
     user,
     voice,
+    workflows,
 )
 from ray.config import get_settings
+from ray.core.scheduler import start_scheduler, stop_scheduler
 from ray.db.session import dispose_engine
 from ray.llm.registry import dispose_registry, get_registry
 from ray.logging_config import configure_logging
@@ -43,7 +45,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         for info in get_registry().describe()
     ]
     log.info("ray.startup", env=settings.env, llm_chain=chain)
+    start_scheduler()
     yield
+    await stop_scheduler()
     await dispose_registry()
     await dispose_engine()
 
@@ -88,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(calendar.router, dependencies=protected)
     app.include_router(integrations.router, dependencies=protected)
     app.include_router(system.router, dependencies=protected)
+    app.include_router(workflows.router, dependencies=protected)
     # Voice has its own query-param auth because WebSocket browsers cannot set
     # arbitrary headers. It still verifies the API token before accepting.
     app.include_router(voice.router)

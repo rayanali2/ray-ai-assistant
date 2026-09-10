@@ -10,6 +10,7 @@ from ray.services import (
     task_service,
     tool_service,
     user_service,
+    workflow_service,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "task_service",
     "tool_service",
     "user_service",
+    "workflow_service",
 ]

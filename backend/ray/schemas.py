@@ -377,6 +377,62 @@ class DiagnosticsResponse(BaseModel):
     suggestions: list[str]
 
 
+class WorkflowRunRead(ORMModel):
+    id: uuid.UUID
+    workflow_id: uuid.UUID
+    success: bool | None
+    output: str
+    error: str
+    started_at: datetime
+    finished_at: datetime | None
+    created_at: datetime
+
+
+class WorkflowRead(ORMModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    name: str
+    description: str
+    agent: str
+    prompt: str
+    enabled: bool
+    interval_minutes: int
+    last_run_at: datetime | None
+    next_run_at: datetime
+    runs: list[WorkflowRunRead] = []
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    agent: str = Field(default="executive", min_length=1, max_length=50)
+    prompt: str = Field(min_length=1, max_length=4_000)
+    enabled: bool = True
+    interval_minutes: int = Field(default=60, ge=1)
+
+
+class WorkflowUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    agent: str | None = Field(default=None, min_length=1, max_length=50)
+    prompt: str | None = Field(default=None, min_length=1, max_length=4_000)
+    enabled: bool | None = None
+    interval_minutes: int | None = Field(default=None, ge=1)
+    next_run_at: datetime | None = None
+
+
+class WorkflowRunSummary(BaseModel):
+    """Result of a manual or scheduled workflow run."""
+
+    workflow_id: uuid.UUID
+    run_id: uuid.UUID
+    success: bool
+    output: str
+    error: str = ""
+
+
 class ExportSnapshot(BaseModel):
     """A complete, user-owned data export (docs/12, docs/13)."""
 
@@ -390,6 +446,7 @@ class ExportSnapshot(BaseModel):
     integrations: list[IntegrationRead]
     tool_permissions: list[ToolPermissionRead]
     conversations: list[ConversationRead]
+    workflows: list[WorkflowRead] = []
 
 
 class IntegrationCheck(BaseModel):

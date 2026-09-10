@@ -90,14 +90,19 @@ pnpm.
 git clone https://github.com/syedrayanali08-creator/ray-ai-assistant.git
 cd ray-ai-assistant
 
-cp .env.example .env          # then set RAY_API_TOKEN and your LLM key
+./scripts/ray init --preset local   # creates .env (or gemini/fast if you have a key)
+# Optionally edit .env to set RAY_GEMINI_API_KEY or RAY_USER_NAME.
 
-./scripts/ray install         # dependencies, Postgres, migrations, seed data
-./scripts/ray start           # opens http://localhost:3000
+./scripts/ray install               # dependencies, Postgres, migrations, seed data
+./scripts/ray start                 # opens http://localhost:3000
+
+# Or, all-in-one:
+# ./scripts/install.sh
 ```
 
 Open http://localhost:3000 and the dashboard shows the seeded project, tasks, schedule,
-memories, and agents. Control the running services with `status`, `stop`, and `logs`.
+memories, agents, and workflows. Control the running services with `status`, `stop`, and `logs`.
+Run `./scripts/ray doctor` to verify your local setup.
 
 ### macOS app bundle
 

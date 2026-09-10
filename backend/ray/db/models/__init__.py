@@ -13,6 +13,7 @@ from ray.db.models.project import Project
 from ray.db.models.task import Task
 from ray.db.models.tool import ToolInvocation, ToolPermission
 from ray.db.models.user import User
+from ray.db.models.workflow import Workflow, WorkflowRun
 
 __all__ = [
     "AgentActivity",
@@ -28,4 +29,6 @@ __all__ = [
     "ToolInvocation",
     "ToolPermission",
     "User",
+    "Workflow",
+    "WorkflowRun",
 ]

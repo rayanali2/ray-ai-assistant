@@ -158,6 +158,10 @@ def test_agent_specs_exist() -> None:
         "fitness.log_workout",
         "fitness.list_workouts",
         "fitness.get_progress",
+        "time.now",
+        "date.today",
+        "weather.current",
+        "system.info",
     )
     assert get_agent_spec("content").tools[0] == "content.create_idea"
     assert get_agent_spec("finance").tools[0] == "finance.record_transaction"
