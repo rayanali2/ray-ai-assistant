@@ -92,30 +92,68 @@ def _translate(exc: genai_errors.APIError) -> Exception:
     return ProviderRequestError(str(exc), provider="gemini")
 
 
+# Default request deadline. 15 seconds is enough for a healthy Gemini response
+# while preventing a hung/overloaded model from blocking the fallback chain.
+DEFAULT_TIMEOUT_MS = 15_000
+
+
 class GeminiProvider(LLMProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, *, model: str = DEFAULT_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        model: str = DEFAULT_MODEL,
+        timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        retry_attempts: int = 1,
+    ) -> None:
         self._model = model
-        self._client = genai.Client(api_key=api_key)
+        # Disable SDK-level retries on 5xx/timeout: the registry already handles
+        # fallback across providers. Retrying the same overloaded endpoint is what
+        # produces the 60-90 second hangs for a simple greeting.
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=timeout_ms,
+                retry_options=types.HttpRetryOptions(attempts=retry_attempts),
+                # The SDK sets X-Server-Timeout from the timeout above; raise the
+                # server-side ceiling so streaming responses are not truncated at 15s.
+                headers={"X-Server-Timeout": "120"},
+            ),
+        )
 
     async def complete(self, request: CompletionRequest) -> Completion:
+        # Use the streaming endpoint even for "non-streaming" tool-calling.
+        # generate_content (non-stream) waits for the full response and, under
+        # load, hangs for 30-90s before returning a 503. generate_content_stream
+        # returns the first token/error quickly and lets us collect tool calls
+        # and prose as they arrive, so the fallback chain activates in seconds.
+        text_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        usage = None
         try:
-            response = await self._client.aio.models.generate_content(
+            stream = await self._client.aio.models.generate_content_stream(
                 model=self._model,
                 contents=_to_contents(request),
                 config=_to_config(request),
             )
+            async for event in stream:
+                if event.usage_metadata:
+                    usage = event.usage_metadata
+                if event.text:
+                    text_parts.append(event.text)
+                if event.function_calls:
+                    tool_calls.extend(
+                        ToolCall(name=call.name or "", arguments=dict(call.args or {}))
+                        for call in event.function_calls
+                    )
         except genai_errors.APIError as exc:
             raise _translate(exc) from exc
 
-        usage = response.usage_metadata
         return Completion(
-            text=_text_of(response),
-            tool_calls=tuple(
-                ToolCall(name=call.name or "", arguments=dict(call.args or {}))
-                for call in response.function_calls or []
-            ),
+            text="".join(text_parts),
+            tool_calls=tuple(tool_calls),
             provider=self.name,
             model=self._model,
             input_tokens=usage.prompt_token_count if usage else None,
