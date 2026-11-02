@@ -37,3 +37,4 @@ Status is one of `Accepted`, `Superseded by ADR-XXXX`, or `Proposed`.
 | [0017](0017-tool-calling-and-provider-fallback.md) | Tool calling and provider fallback | Accepted |
 | [0018](0018-local-voice-pipeline.md) | Local voice providers behind optional model downloads | Accepted (extends 0009) |
 | [0019](0019-subscription-cli-providers.md) | Personal subscription CLI providers and ordered fallbacks | Accepted |
+| [0020](0020-electron-desktop-shell.md) | Electron desktop shell and unsigned packaging | Accepted |

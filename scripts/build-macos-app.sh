@@ -1,4 +1,5 @@
 #!/bin/bash
+# Lightweight browser-launcher alternative; see desktop/ for the native Electron DMG.
 # Build a double-clickable Ray.app for the current checkout and copy it to
 # /Applications (or any target directory you pass as the first argument).
 #

@@ -1,0 +1,27 @@
+:root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #d7edf4; background: #030a10; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% 20%, #0b3447, transparent 65%); }
+header { -webkit-app-region: drag; display: flex; align-items: center; justify-content: space-between; padding: 15px 22px; font: 9px monospace; letter-spacing: .22em; color: #70c7df; }
+button { -webkit-app-region: no-drag; background: #092330; border: 1px solid #286073; border-radius: 5px; color: #a6eeff; padding: 10px 15px; cursor: pointer; font-size: 12px; }
+button:hover { background: #134054; }
+button:focus-visible { outline: 2px solid #65dfff; outline-offset: 3px; }
+button:disabled { opacity: .45; cursor: wait; }
+button[hidden] { display: none; }
+#close { border: 0; padding: 3px 9px; background: transparent; font-size: 20px; }
+main { display: flex; flex-direction: column; align-items: center; padding: 10px 30px 22px; text-align: center; }
+.reactor { width: 210px; flex-shrink: 0; color: #64ddff; filter: drop-shadow(0 0 10px #39ceff66); margin: 5px 0 18px; }
+.reactor circle { fill: none; stroke: currentColor; transform-origin: 120px 120px; }
+.ticks { stroke-width: 4; stroke-dasharray: 1 8; opacity: .4; animation: spin 60s linear infinite; }
+.outer { stroke-width: 5; stroke-dasharray: 80 12 4 12; animation: spin 16s linear infinite; }
+.inner { stroke-width: 2; stroke-dasharray: 35 7; animation: spin 10s linear infinite reverse; }
+.reactor .core { fill: #3bceff22; stroke-width: 1; filter: drop-shadow(0 0 10px #80e4ff); }
+.reactor path { fill: #dcfbff; filter: drop-shadow(0 0 12px #7addff); }
+.eyebrow { font: 9px monospace; color: #62c7e4; letter-spacing: .24em; }
+h1 { font-size: 22px; font-weight: 400; margin: 16px 0 0; line-height: 1.35; text-shadow: 0 0 20px #57deff55; }
+p { color: #8daab8; font-size: 12px; line-height: 1.6; max-width: 470px; }
+.actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 14px; }
+pre { width: 100%; height: 155px; margin: 0; border: 1px solid #1d4050; background: #02090dbb; border-radius: 5px; text-align: left; padding: 12px; color: #a5c5d2; font: 10px/1.5 monospace; white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; user-select: text; }
+footer { color: #6e92a3; font: 8px monospace; letter-spacing: .25em; margin-top: 20px; }
+body[data-mode=error] h1 { color: #ffc678; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }

@@ -8,6 +8,7 @@ import { MessageList } from "@/components/message-list";
 import { Reactor, type ReactorState } from "@/components/reactor";
 import { VoiceControl } from "@/components/voice-control";
 import { useChat } from "@/hooks/use-chat";
+import { useDesktopListen } from "@/hooks/use-desktop-listen";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard";
 import { useVoice } from "@/hooks/use-voice";
 import type { Health, RestoredConversation } from "@/lib/api";
@@ -49,6 +50,7 @@ export function Conversation({
     wakeWordEnabled: health?.voice?.wake_word_enabled ?? false,
     capabilities: health?.voice ?? null,
   });
+  useDesktopListen(voice.pushToTalk);
 
   // The voice indicator tracks the request, not just the microphone.
   // In local voice mode the WebSocket drives states itself.

@@ -431,13 +431,14 @@ Complete. All features are merged into `main`.
 * [x] `scripts/ray doctor` and `scripts/ray init --preset` onboarding commands
 * [x] `install.sh` / `install.ps1` one-liner entry points
 * [x] macOS `.app` icon resource and `CFBundleIconFile`
+* [x] Electron desktop shell with checkout onboarding, menu-bar/tray presence, global voice shortcut and unsigned macOS DMG/ZIP packaging
 
 ## Backlog / Future
 
 * Bundled PostgreSQL to remove the Docker dependency
-* Menu-bar / tray presence and auto-update
+* Desktop auto-update (menu-bar / tray presence is implemented)
 * Signed, notarized macOS releases and Windows installer
-* Linux AppImage / Flatpak distribution
+* Linux Flatpak distribution (AppImage packaging is available for local verification)
 * "Ray" and "Jarvis" wake-word aliases with per-alias confirmation tones
 * Cinematic Iron Man/JARVIS reactor-style HUD polish (ambient glow, voice-driven visual state)
 * Future specialized agents/workflows for fitness, content creation, personal finance, and other productivity domains
