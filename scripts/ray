@@ -80,6 +80,7 @@ def _run_bg(cmd: list[str], cwd: Path, log: Path) -> subprocess.Popen[str]:
             stderr=subprocess.STDOUT,
             text=True,
             start_new_session=True,
+            env={**_read_env(), **os.environ},
         )
     return proc
 
