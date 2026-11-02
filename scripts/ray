@@ -25,6 +25,9 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -431,6 +434,16 @@ def _doctor(args: argparse.Namespace) -> None:  # noqa: ARG001
           "not installed; required for browser audio. See README local voice setup: https://ffmpeg.org/download.html"))
 
     env = {**_read_env(), **os.environ}
+    data_dir = Path(env.get("RAY_DATA_DIR", str(Path.home() / ".local/share/ray"))).expanduser()
+    google_state = "not configured; set RAY_GOOGLE_CLIENT_ID and RAY_GOOGLE_CLIENT_SECRET"
+    if env.get("RAY_GOOGLE_CLIENT_ID") and env.get("RAY_GOOGLE_CLIENT_SECRET"):
+        try:
+            connected = bool(json.loads((data_dir / "google-calendar.json").read_text()).get("refresh_token"))
+        except (OSError, ValueError, AttributeError):
+            connected = False
+        google_state = "connected (local token; use Settings Check to verify)" if connected else "not connected; run ./scripts/ray connect google"
+    print(f"Google Calendar (optional): {google_state}")
+    print("Notion (optional): " + ("token configured; share pages via Connections and use Settings Check to verify" if env.get("RAY_NOTION_TOKEN") else "not configured; set RAY_NOTION_TOKEN"))
     for name, setting, command, login in (
         ("Claude", "RAY_CLAUDE_CLI_BINARY", ["auth", "status", "--json"], "claude"),
         ("Codex", "RAY_CODEX_CLI_BINARY", ["login", "status"], "codex login"),
@@ -579,6 +592,25 @@ def _init(args: argparse.Namespace) -> None:
     print("Edit .env if you need to add API keys or adjust providers.")
 
 
+def _connect(args: argparse.Namespace) -> None:
+    env = {**_read_env(), **os.environ}
+    request = urllib.request.Request("http://127.0.0.1:8000/integrations/google/auth-url", headers={"Authorization": f"Bearer {env.get('RAY_API_TOKEN', '')}"})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            url = json.load(response)["url"]
+    except urllib.error.HTTPError as exc:
+        print(f"Google connection could not start (HTTP {exc.code}). Set RAY_GOOGLE_CLIENT_ID and RAY_GOOGLE_CLIENT_SECRET, then restart Ray.")
+        sys.exit(1)
+    except (urllib.error.URLError, ValueError, KeyError):
+        print("Cannot reach Ray. Run ./scripts/ray start --no-browser first.")
+        sys.exit(1)
+    if not webbrowser.open(url):
+        print("Open this Google consent URL in your browser:")
+        print(url)
+    else:
+        print("Complete Google consent in your browser. Return to Ray when connected.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ray install/run helper")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -607,6 +639,10 @@ def main() -> None:
 
     configure = sub.add_parser("configure-key", help="save RAY_GEMINI_API_KEY from the environment")
     configure.set_defaults(func=_configure_key)
+
+    connect = sub.add_parser("connect", help="connect an external integration in your browser")
+    connect.add_argument("provider", choices=["google"])
+    connect.set_defaults(func=_connect)
 
     init = sub.add_parser("init", help="create .env from a preset")
     init.add_argument("--preset", choices=["auto", *PRESETS], default="local", help="configuration preset")

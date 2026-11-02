@@ -17,6 +17,7 @@ from ray.integrations.github import GitHubAdapter
 from ray.integrations.knowledge import ObsidianAdapter
 from ray.services import calendar_service, integration_service
 from ray.services.errors import ServiceError
+from ray.tools.cloud_tools import CLOUD_TOOLS
 from ray.tools.manager import Tool, ToolContext
 
 
@@ -153,6 +154,7 @@ async def _calendar_ics_import(ctx: ToolContext, arguments: dict[str, object]) -
 
 
 INTEGRATION_TOOLS: tuple[Tool, ...] = (
+    *CLOUD_TOOLS,
     Tool(
         name="github.read_repo",
         description="Read metadata for a GitHub repository. repo must be 'owner/name'.",

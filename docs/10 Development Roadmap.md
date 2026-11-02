@@ -171,6 +171,11 @@ Complete. The routing, specialist agents, Tool Manager, approval gate, and trace
 
 # Phase 5 — Productivity Surfaces and Integrations
 
+**Status: complete.** Google Calendar now supports installed-app OAuth/PKCE,
+live schedule reads and approved create/update/delete; Notion supports paginated
+search/read and approved create/append. Local calendar/ICS and Obsidian remain the
+local-first defaults. Live account verification requires user-supplied credentials.
+
 ## Goal
 
 Connect Ray with the user's existing tools, in priority order (ADR-0010).

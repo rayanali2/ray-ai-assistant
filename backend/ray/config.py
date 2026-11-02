@@ -6,6 +6,7 @@ secret ever lives in source.
 
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, Field, field_validator
@@ -45,6 +46,10 @@ class Settings(BaseSettings):
     user_name: str = "Ray User"
     user_email: str | None = None
     user_timezone: str = "UTC"
+    data_dir: Path = Field(default_factory=lambda: Path.home() / ".local/share/ray")
+    google_client_id: str = ""
+    google_client_secret: str = Field(default="", repr=False)
+    notion_token: str = Field(default="", repr=False)
 
     # LLM provider selection (ADR-0001, ADR-0015). "mock" is always appended to the
     # chain, so Ray answers even with nothing configured.

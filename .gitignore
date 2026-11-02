@@ -2,6 +2,7 @@
 .env
 .env.local
 .ray/
+google-calendar.json
 *.pem
 
 # Python

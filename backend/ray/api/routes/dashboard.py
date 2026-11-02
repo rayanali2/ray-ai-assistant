@@ -49,7 +49,7 @@ async def get_dashboard(
     user = await user_service.get_user(session, user_id)
     projects = await project_service.list_projects(session, user_id)
     tasks = await task_service.list_tasks(session, user_id)
-    today_events = await calendar_service.list_events(
+    today_events = await calendar_service.dashboard_events(
         session, user_id, start=day_start, end=day_start + timedelta(days=1)
     )
     memories = await memory_service.list_memories(session, user_id, limit=10)

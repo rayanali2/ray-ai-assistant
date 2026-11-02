@@ -31,6 +31,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const listIntegrations = () => call<Integration[]>("");
+export const getConnections = () => call<Record<string, string>>("/connections");
+export const getGoogleAuthUrl = () => call<{ url: string }>("/google/auth-url");
 
 export const createIntegration = (body: IntegrationCreate) =>
   call<Integration>("", { method: "POST", body: JSON.stringify(body) });
