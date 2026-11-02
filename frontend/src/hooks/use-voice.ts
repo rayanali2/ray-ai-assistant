@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getVoiceStreamUrl } from "@/app/actions/voice";
+import { canUseLocalVoice } from "@/lib/hud";
 import type { VoiceCapabilities } from "@/lib/api";
 import {
   DEFAULT_WAKE_WORDS,
@@ -82,6 +83,8 @@ export interface UseVoiceOptions {
 
 export interface Voice {
   state: VoiceState;
+  micStream: MediaStream | null;
+  playbackAudio: HTMLAudioElement | null;
   supported: boolean;
   /** Interim transcript, so the user can see they are being heard. */
   transcript: string;
@@ -155,6 +158,10 @@ export function useVoice({
   const [lastWake, setLastWake] = useState<WakeEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
+  const [playbackAudio, setPlaybackAudio] = useState<HTMLAudioElement | null>(null);
+  const localMicRef = useRef<MediaStream | null>(null);
+  const localTurnRef = useRef(0);
 
   const setTranscriptWithRef = useCallback((value: string | ((prev: string) => string)) => {
     setTranscript((prev) => {
@@ -198,7 +205,7 @@ export function useVoice({
     (text: string) => {
       if (localReady || !speechEnabled || !speechSupported || text.trim() === "") return;
 
-      window.speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.05;
       utterance.onstart = () => setState("speaking");
@@ -210,7 +217,7 @@ export function useVoice({
 
   const toggleSpeech = useCallback(() => {
     setSpeechEnabled((enabled) => {
-      if (enabled) window.speechSynthesis.cancel();
+      if (enabled) window.speechSynthesis?.cancel();
       return !enabled;
     });
   }, []);
@@ -330,6 +337,7 @@ export function useVoice({
   const pendingAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const resetLocal = useCallback(() => {
+    localTurnRef.current += 1;
     if (recorderRef.current?.state !== "inactive") {
       try {
         recorderRef.current?.stop();
@@ -338,6 +346,9 @@ export function useVoice({
       }
     }
     recorderRef.current = null;
+    localMicRef.current?.getTracks().forEach((track) => track.stop());
+    localMicRef.current = null;
+    setMicStream(null);
     if (wsRef.current) {
       wsRef.current.onclose = null;
       try {
@@ -349,7 +360,9 @@ export function useVoice({
     wsRef.current = null;
     audioBufferRef.current = null;
     pendingAudioRef.current?.pause();
+    if (pendingAudioRef.current) URL.revokeObjectURL(pendingAudioRef.current.src);
     pendingAudioRef.current = null;
+    setPlaybackAudio(null);
   }, []);
 
   const playPcm = useCallback((pcm: Uint8Array, sampleRate: number) => {
@@ -358,18 +371,25 @@ export function useVoice({
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     pendingAudioRef.current = audio;
+    setPlaybackAudio(audio);
     audio.onplay = () => setState("speaking");
     audio.onended = () => {
       setState(armedRef.current ? "armed" : "idle");
       URL.revokeObjectURL(url);
       pendingAudioRef.current = null;
+      setPlaybackAudio(null);
     };
     audio.onerror = () => {
       URL.revokeObjectURL(url);
       pendingAudioRef.current = null;
+      setPlaybackAudio(null);
+      setState(armedRef.current ? "armed" : "idle");
     };
     void audio.play().catch(() => {
-      // Autoplay blocked; leave it as a manual fallback later if needed.
+      URL.revokeObjectURL(url);
+      setPlaybackAudio(null);
+      setState("idle");
+      setError("Audio playback was blocked. Try another microphone interaction.");
     });
   }, []);
 
@@ -433,6 +453,7 @@ export function useVoice({
     }
 
     resetLocal();
+    const turn = localTurnRef.current;
     setError(null);
     setTranscriptWithRef("");
     audioBufferRef.current = null;
@@ -450,6 +471,8 @@ export function useVoice({
       return;
     }
 
+    if (turn !== localTurnRef.current) return;
+
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -458,7 +481,14 @@ export function useVoice({
       return;
     }
 
+    if (turn !== localTurnRef.current) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
     const ws = new WebSocket(url);
+    localMicRef.current = stream;
+    setMicStream(stream);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 
@@ -480,6 +510,7 @@ export function useVoice({
         ws.send(JSON.stringify({ type: "stop" }));
       }
       stream.getTracks().forEach((track) => track.stop());
+      if (localMicRef.current === stream) setMicStream(null);
     };
 
     ws.onopen = () => {
@@ -535,7 +566,7 @@ export function useVoice({
 
   // --- public controls ---------------------------------------------------------
   const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
     if (localReady) {
       resetLocal();
       setState("idle");
@@ -545,7 +576,7 @@ export function useVoice({
   }, [localReady, resetLocal, stopRecognition]);
 
   const toggleArmed = useCallback(() => {
-    window.speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
     if (localReady) {
       if (state === "idle" || state === "armed") {
         void startLocalTurn();
@@ -559,7 +590,7 @@ export function useVoice({
   }, [localReady, startLocalTurn, stopLocalTurn, startRecognition, stopRecognition, state]);
 
   const pushToTalk = useCallback(() => {
-    window.speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
     if (localReady) {
       if (state === "speaking") {
         bargeLocal();
@@ -572,7 +603,7 @@ export function useVoice({
     }
     if (state === "speaking") {
       // Barge in on a spoken reply and start a fresh push-to-talk turn.
-      window.speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
       setState("idle");
       startRecognition("push");
     } else if (state === "listening") {
@@ -605,7 +636,9 @@ export function useVoice({
 
   return {
     state,
-    supported: supported || (localReady && typeof window !== "undefined" && typeof MediaRecorder !== "undefined"),
+    micStream,
+    playbackAudio,
+    supported: supported || canUseLocalVoice(localReady, typeof MediaRecorder !== "undefined", typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia),
     transcript,
     lastWake,
     error,

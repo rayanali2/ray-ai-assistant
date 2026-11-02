@@ -57,16 +57,16 @@ export function VoiceControl({
         onClick={voice.toggleArmed}
         disabled={!voice.supported}
         aria-pressed={armed}
-        aria-label={armed ? "Disarm wake word listening" : "Arm wake word listening"}
+        aria-label={voice.localReady ? (armed ? "Stop local recording" : "Start local recording") : armed ? "Disarm wake word listening" : "Arm wake word listening"}
         title={
           voice.supported
-            ? `Listen continuously for "${wakeLabel}"`
+            ? voice.localReady ? "Record locally; click again to send" : `Listen continuously for "${wakeLabel}"`
             : "This browser has no speech recognition"
         }
         className="flex items-center gap-2 rounded-full border border-hud-border px-3 py-1.5 text-xs text-hud-muted transition-colors hover:border-hud-accent/50 hover:text-hud-text disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span className={`h-2 w-2 rounded-full ${DOT[voice.state]}`} />
-        {armed && wakeWords.length > 1 ? `Say "${wakeLabel}"` : LABEL[voice.state]}
+        {voice.localReady ? (voice.state === "idle" ? "Local microphone" : LABEL[voice.state]) : armed && wakeWords.length > 1 ? `Say "${wakeLabel}"` : LABEL[voice.state]}
       </button>
 
       <button

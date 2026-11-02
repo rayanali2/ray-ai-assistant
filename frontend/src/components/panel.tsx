@@ -17,10 +17,10 @@ export function Panel({
 }) {
   return (
     <section
-      className={`flex flex-col rounded-lg border border-hud-border bg-hud-panel/70 backdrop-blur-sm ${className}`}
+      className={`hud-frame flex flex-col border border-hud-border bg-hud-panel/70 backdrop-blur-sm ${className}`}
     >
       <header className="flex items-center justify-between border-b border-hud-border px-4 py-2.5">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-hud-muted">
+        <h2 className="hud-heading font-mono text-[11px] uppercase tracking-[0.18em] text-hud-accent">
           {title}
         </h2>
         {badge}

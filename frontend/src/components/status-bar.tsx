@@ -25,7 +25,7 @@ export function StatusBar() {
   const online = health?.status === "ok";
 
   return (
-    <header className="flex items-center justify-between border-b border-hud-border bg-hud-panel/50 px-6 py-3">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hud-border bg-hud-panel/50 px-6 py-3">
       <div className="flex items-baseline gap-3">
         <Link href="/" className="font-mono text-lg tracking-[0.3em] text-hud-accent">
           RAY
