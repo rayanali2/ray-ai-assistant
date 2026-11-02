@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { promisify } = require("node:util");
-const { ORIGIN, isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds } = require("./core.cjs");
+const { ORIGIN, isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds, geminiEnvironment } = require("./core.cjs");
 
 app.setName("Ray");
 const configFile = path.join(app.getPath("appData"), "Ray", "config.json");
@@ -42,9 +42,13 @@ function saveConfig(update) {
 
 function resource(name) { return app.isPackaged ? path.join(process.resourcesPath, name) : path.join(__dirname, name === "install.sh" ? "../scripts/install.sh" : "../macos/Ray.app/Contents/Resources/icon.png"); }
 
-function run(command, args, { cwd = repo || os.homedir(), timeout = 120000, quiet = false } = {}) {
+function run(command, args, { cwd = repo || os.homedir(), timeout = 120000, quiet = false, environment = {} } = {}) {
+  if (repo && command === path.join(repo, "scripts/ray")) {
+    args = ["run", "--python", "3.12", "python", command, ...args];
+    command = "uv";
+  }
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, env: { ...env, ...environment }, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     let timedOut = false;
     let killTimer;
@@ -198,15 +202,21 @@ async function chooseRepo() {
   await start();
 }
 
-async function install() {
+async function install(key = "") {
   controls("splash", "Installing Ray into ~/ray-ai-assistant…");
-  await ensureDocker();
   publish({ message: "Installing Ray into ~/ray-ai-assistant…" });
-  await run("/bin/bash", [resource("install.sh")], { cwd: os.homedir(), timeout: 20 * 60 * 1000 });
+  await run("/bin/bash", [resource("install.sh")], { cwd: os.homedir(), timeout: 20 * 60 * 1000, environment: { RAY_FROM_DESKTOP: "1", ...geminiEnvironment(key) } });
   const installed = path.join(os.homedir(), "ray-ai-assistant");
   if (!isCheckout(installed)) throw new Error("Installer finished without a checkout at ~/ray-ai-assistant.");
   repo = installed;
   saveConfig({ repoPath: repo });
+  await start();
+}
+
+async function saveKey(key) {
+  if (!repo) throw new Error("Choose a checkout first.");
+  await run("uv", ["run", "--python", "3.12", "python", "scripts/ray", "configure-key"], { environment: { RAY_GEMINI_API_KEY: key } });
+  await stop();
   await start();
 }
 
@@ -246,12 +256,14 @@ else {
       { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
     ]));
     ipcMain.on("ray:setup-ready", (event) => { if (event.sender === controlWindow?.webContents) publish(); });
-    ipcMain.handle("ray:setup-action", async (event, action) => {
+    ipcMain.handle("ray:setup-action", async (event, action, key = "") => {
       if (event.sender !== controlWindow?.webContents) return;
+      geminiEnvironment(key);
       if (action === "logs") openLogs();
       else if (action === "close") controlWindow?.close();
       else if (action === "choose") await operation(chooseRepo);
-      else if (action === "install" && !repo) await operation(install);
+      else if (action === "install" && !repo) await operation(() => install(key));
+      else if (action === "save-key" && repo && key) await operation(() => saveKey(key));
       else if (action === "retry") await operation(start);
       else if (action === "doctor") await operation(doctor);
     });

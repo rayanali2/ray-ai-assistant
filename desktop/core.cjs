@@ -26,10 +26,18 @@ function findCheckout(home, config, env = process.env) {
 
 function buildPath(loginPath, home, inherited = "") {
   return [...new Set([
-    "/opt/homebrew/bin", "/usr/local/bin", path.join(home, ".local/bin"),
+    path.join(home, ".local/bin"),
+    path.join(home, ".local/share/pnpm"),
+    path.join(home, ".local/share/pnpm/bin"),
+    "/opt/homebrew/bin", "/usr/local/bin",
     path.join(home, ".cargo/bin"), "/Applications/Docker.app/Contents/Resources/bin",
     ...(loginPath || "").split(path.delimiter), ...inherited.split(path.delimiter), "/usr/bin", "/bin", "/usr/sbin", "/sbin",
   ].filter(Boolean))].join(path.delimiter);
+}
+
+function geminiEnvironment(key) {
+  if (typeof key !== "string" || key.length > 512 || (key && !/^[A-Za-z0-9_-]+$/.test(key))) throw new Error("Paste only the API key, without quotes or spaces.");
+  return key ? { RAY_GEMINI_API_KEY: key } : {};
 }
 
 function isLocal(url) {
@@ -47,4 +55,4 @@ function windowBounds(saved, displays) {
   return { x: saved.x, y: saved.y, width: Math.max(800, Math.min(2560, saved.width)), height: Math.max(600, Math.min(1800, saved.height)) };
 }
 
-module.exports = { ORIGIN, isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds };
+module.exports = { ORIGIN, isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds, geminiEnvironment };

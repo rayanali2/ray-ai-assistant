@@ -53,6 +53,18 @@ async def test_unconfigured_gemini_is_skipped_not_fatal() -> None:
     assert completion.provider == "mock"
 
 
+async def test_active_provider_tracks_answers_not_router() -> None:
+    registry = ProviderRegistry(_settings(llm_provider="gemini", llm_fallback_provider="mock"))
+    assert registry.active_provider is None
+    await registry.complete(REQUEST, role="router")
+    assert registry.active_provider is None
+    await registry.complete(REQUEST)
+    assert registry.active_provider == "mock"
+    registry.active_provider = None
+    async for _ in registry.stream(REQUEST):
+        assert registry.active_provider == "mock"
+
+
 async def test_rate_limited_provider_falls_back_and_reports_degradation() -> None:
     registry = ProviderRegistry(
         _settings(llm_provider="gemini", llm_fallback_provider="mock", gemini_api_key="set")

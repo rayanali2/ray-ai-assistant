@@ -157,16 +157,33 @@ still quarantines the downloaded app, after verifying its source run:
 xattr -dr com.apple.quarantine /Applications/Ray.app
 ```
 
-Docker Desktop is required, alongside Git, Node.js, pnpm and uv. Ray starts Docker
-Desktop if needed. The desktop download is a native Electron window, not a bundled
-database or Python/Node runtime for the services; it manages a separate checkout.
+Click **Install Ray** to bootstrap without Homebrew or terminal commands. Ray
+installs missing uv/Python 3.12 and standalone pnpm/Node 22 into your home directory
+(no sudo), preserving existing compatible tools. If Git/Python is missing on macOS,
+accept Apple's Command Line Tools dialog and click Install Ray again when it finishes.
+Docker Desktop still requires its own installation/first-run setup: Ray opens its
+download page if missing, or starts it and waits when installed.
+The desktop download manages a separate checkout rather than bundling the database/runtime.
 On launch Ray checks `RAY_HOME`, then `~/Library/Application Support/Ray/config.json`
 (`repoPath`), then `~/ray-ai-assistant` and `~/Ray`. If none exists, choose an existing
 folder containing `scripts/ray` or click **Install Ray** to run the existing installer
-into `~/ray-ai-assistant`. Installation output is displayed in the window.
+into `~/ray-ai-assistant`. Installation output is displayed in the window; existing
+checkouts and configuration are preserved on retry. Desktop installation does not
+open a separate browser.
+
+For **real AI chat**, paste an optional **Gemini API key** from
+[Google AI Studio](https://aistudio.google.com/) before installing. It is passed to
+the installer privately and saved only in the checkout's gitignored `.env` (owner-only
+permissions), never in desktop config or logs. Selection order for a fresh install:
+Gemini key → signed-in Claude/Codex CLI → local Ollama. Only installed **and logged-in**
+CLIs are selected. With neither a key, a signed-in CLI nor a running Ollama/model,
+Ray explicitly warns that responses are canned; add a key later through
+**Preferences → Save key and restart**, or install Ollama and pull `llama3.2`.
+The HUD shows the last answering provider and warns when mock fallback is used.
+No cloud account, subscription login or Ollama model is created automatically.
 
 The tray and normal application menu offer Show, Start/Stop/Restart, logs, doctor
-and Preferences (change checkout). **Cmd+Shift+Space** focuses Ray and invokes the
+and Preferences (change checkout or Gemini key). **Cmd+Shift+Space** focuses Ray and invokes the
 same action as the microphone button; local voice must be configured if Electron
 does not provide browser speech recognition. **Cmd+Q** quits the app **without
 stopping services**; choose **Quit and stop services** for an explicit shutdown.

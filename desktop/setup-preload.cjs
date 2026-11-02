@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("raySetup", {
-  action: (name) => ipcRenderer.invoke("ray:setup-action", name),
+  action: (name, key = "") => ipcRenderer.invoke("ray:setup-action", name, key),
   onStatus(callback) {
     const handler = (_event, status) => callback(status);
     ipcRenderer.on("ray:status", handler);

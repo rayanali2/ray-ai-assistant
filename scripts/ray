@@ -124,6 +124,8 @@ def _read_env() -> dict[str, str]:
 
 
 def _write_env(env: dict[str, str]) -> None:
+    ENV_FILE.touch(mode=0o600, exist_ok=True)
+    ENV_FILE.chmod(0o600)
     ENV_FILE.write_text("\n".join(f"{k}={v}" for k, v in env.items()) + "\n", encoding="utf-8")
 
 
@@ -477,8 +479,56 @@ def _doctor(args: argparse.Namespace) -> None:  # noqa: ARG001
     sys.exit(0 if all_ok else 1)
 
 
+def _logged_in_cli() -> str | None:
+    for name, command in (
+        ("claude", ["auth", "status", "--json"]),
+        ("codex", ["login", "status"]),
+    ):
+        binary = shutil.which(os.environ.get(f"RAY_{name.upper()}_CLI_BINARY", name))
+        if not binary:
+            continue
+        try:
+            result = subprocess.run([binary, *command], capture_output=True, text=True, timeout=5)
+            logged_in = (
+                json.loads(result.stdout).get("loggedIn") is True
+                if name == "claude"
+                else "logged in" in (result.stdout + result.stderr).lower()
+                and "not logged in" not in (result.stdout + result.stderr).lower()
+            )
+            if result.returncode == 0 and logged_in:
+                return f"{name}_cli"
+        except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+            continue
+    return None
+
+
+def _gemini_key() -> str:
+    key = os.environ.get("RAY_GEMINI_API_KEY", "").strip()
+    if key and (len(key) > 512 or not all(c.isascii() and (c.isalnum() or c in "-_") for c in key)):
+        raise SystemExit("Invalid Gemini key format; paste only the API key, without quotes.")
+    return key
+
+
+def _configure_key(args: argparse.Namespace) -> None:  # noqa: ARG001
+    key = _gemini_key()
+    if not key:
+        raise SystemExit("Provide RAY_GEMINI_API_KEY to save a Gemini key.")
+    env = _read_env()
+    if not env:
+        raise SystemExit("Initialize Ray before changing its API key.")
+    env.update(RAY_GEMINI_API_KEY=key, RAY_LLM_PROVIDER="gemini")
+    _write_env(env)
+    print("Gemini key saved privately. Restart Ray services to apply it.")
+
+
 def _init(args: argparse.Namespace) -> None:
     """Create or update .env from a preset configuration."""
+    key = _gemini_key()
+    automatic = args.preset == "auto"
+    cli = None
+    if automatic:
+        cli = None if key else _logged_in_cli()
+        args.preset = "gemini" if key else "subscriptions" if cli else "local"
     preset = PRESETS.get(args.preset)
     if preset is None:
         print(f"Unknown preset '{args.preset}'. Choose one of: {', '.join(PRESETS)}")
@@ -499,14 +549,23 @@ def _init(args: argparse.Namespace) -> None:
 
     # Preserve an existing Gemini key when switching presets.
     existing = _read_env()
-    for key in ("GEMINI_API_KEY", "RAY_GEMINI_API_KEY"):
-        if key in existing:
-            env[key] = existing[key]
+    for env_key in ("GEMINI_API_KEY", "RAY_GEMINI_API_KEY"):
+        if env_key in existing:
+            env[env_key] = existing[env_key]
 
     if args.preset == "subscriptions":
         merged = {**existing, **os.environ}
         if merged.get("RAY_GEMINI_API_KEY") or merged.get("GEMINI_API_KEY"):
             env["RAY_LLM_PROVIDER"] = "gemini"
+
+    if key:
+        env["RAY_GEMINI_API_KEY"] = key
+    if automatic:
+        env["RAY_EMBEDDING_BACKEND"] = "hashing"
+        if cli:
+            env["RAY_LLM_PROVIDER"] = cli
+        if args.preset == "local":
+            print("No signed-in model found. Add a free Gemini key in desktop Preferences (aistudio.google.com), or install Ollama and pull llama3.2. Until then replies are canned mock responses.")
 
     _write_env(env)
     print(f"Created .env with the '{args.preset}' preset for user '{args.name}'.")
@@ -539,8 +598,11 @@ def main() -> None:
     doctor = sub.add_parser("doctor", help="check dependencies and runtime readiness")
     doctor.set_defaults(func=_doctor)
 
+    configure = sub.add_parser("configure-key", help="save RAY_GEMINI_API_KEY from the environment")
+    configure.set_defaults(func=_configure_key)
+
     init = sub.add_parser("init", help="create .env from a preset")
-    init.add_argument("--preset", choices=list(PRESETS), default="local", help="configuration preset")
+    init.add_argument("--preset", choices=["auto", *PRESETS], default="local", help="configuration preset")
     init.add_argument("--name", default="Ray User", help="your name, used by Ray in conversation")
     init.add_argument("--force", action="store_true", help="overwrite an existing .env")
     init.set_defaults(func=_init)
