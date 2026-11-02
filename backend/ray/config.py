@@ -8,7 +8,7 @@ import json
 from functools import lru_cache
 from typing import Annotated, Any, Literal
 
-from pydantic import BeforeValidator, Field
+from pydantic import BeforeValidator, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -20,6 +20,9 @@ def _parse_list(value: Any) -> Any:
             return json.loads(value)
         return [item.strip() for item in value.split(",") if item.strip()]
     return value
+
+
+ProviderName = Literal["gemini", "ollama", "mock", "claude_cli", "codex_cli"]
 
 
 class Settings(BaseSettings):
@@ -45,9 +48,28 @@ class Settings(BaseSettings):
 
     # LLM provider selection (ADR-0001, ADR-0015). "mock" is always appended to the
     # chain, so Ray answers even with nothing configured.
-    llm_provider: Literal["gemini", "ollama", "mock"] = "gemini"
-    llm_router_provider: Literal["gemini", "ollama", "mock"] | None = None
-    llm_fallback_provider: Literal["gemini", "ollama", "mock"] | None = "ollama"
+    llm_provider: ProviderName = "gemini"
+    llm_router_provider: ProviderName | None = None
+    llm_fallback_provider: str | None = "ollama"
+
+    @field_validator("llm_fallback_provider")
+    @classmethod
+    def validate_fallbacks(cls, value: str | None) -> str | None:
+        if value is not None:
+            names = [name.strip() for name in value.split(",") if name.strip()]
+            if any(
+                name not in {"gemini", "ollama", "mock", "claude_cli", "codex_cli"}
+                for name in names
+            ):
+                raise ValueError("Unknown LLM fallback provider")
+            return ",".join(names)
+        return None
+
+    claude_cli_binary: str = "claude"
+    codex_cli_binary: str = "codex"
+    claude_cli_model: str = ""
+    codex_cli_model: str = ""
+    cli_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # Provider credentials and models. The key is a secret: it is read from the
     # environment, never logged, and never written to the database.

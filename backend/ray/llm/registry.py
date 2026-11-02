@@ -11,11 +11,11 @@ Two ideas live here:
 
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import structlog
 
-from ray.config import Settings, get_settings
+from ray.config import ProviderName, Settings, get_settings
 from ray.llm.base import (
     Chunk,
     Completion,
@@ -30,7 +30,6 @@ from ray.llm.providers.mock import MockProvider
 log = structlog.get_logger()
 
 Role = Literal["agent", "router"]
-ProviderName = Literal["gemini", "ollama", "mock"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +42,22 @@ class Degradation:
 
 def _build(name: ProviderName, settings: Settings) -> LLMProvider:
     """Construct one provider. Imports are local so an unused SDK is never loaded."""
+    if name == "claude_cli":
+        from ray.llm.providers.claude_cli import ClaudeCLIProvider
+
+        return ClaudeCLIProvider(
+            binary=settings.claude_cli_binary,
+            model=settings.claude_cli_model,
+            timeout_seconds=settings.cli_timeout_seconds,
+        )
+    if name == "codex_cli":
+        from ray.llm.providers.codex_cli import CodexCLIProvider
+
+        return CodexCLIProvider(
+            binary=settings.codex_cli_binary,
+            model=settings.codex_cli_model,
+            timeout_seconds=settings.cli_timeout_seconds,
+        )
     if name == "gemini":
         if not settings.gemini_api_key:
             raise ProviderUnavailableError("RAY_GEMINI_API_KEY is not set", provider="gemini")
@@ -84,13 +99,17 @@ class ProviderRegistry:
         preferred = settings.llm_router_provider if role == "router" else None
         ordered = [
             preferred or settings.llm_provider,
-            settings.llm_fallback_provider,
-            "mock",
+            *(
+                cast(ProviderName, name.strip())
+                for name in (settings.llm_fallback_provider or "").split(",")
+                if name.strip()
+            ),
         ]
         seen: list[ProviderName] = []
         for name in ordered:
-            if name is not None and name not in seen:
+            if name != "mock" and name not in seen:
                 seen.append(name)
+        seen.append("mock")
         return tuple(seen)
 
     def register(self, name: ProviderName, provider: LLMProvider) -> None:
