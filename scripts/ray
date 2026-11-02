@@ -17,6 +17,7 @@ so it works on macOS and Linux with uv + pnpm + Docker already installed.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import shutil
@@ -37,6 +38,11 @@ ENV_FILE = REPO_ROOT / ".env"
 DEFAULT_DB = "postgresql+asyncpg://ray:ray@localhost:5433/ray"
 
 PRESETS: dict[str, dict[str, str]] = {
+    "subscriptions": {
+        "RAY_LLM_PROVIDER": "claude_cli",
+        "RAY_LLM_FALLBACK_PROVIDER": "claude_cli,codex_cli,ollama",
+        "RAY_EMBEDDING_BACKEND": "hashing",
+    },
     "local": {
         "RAY_LLM_PROVIDER": "ollama",
         "RAY_LLM_FALLBACK_PROVIDER": "mock",
@@ -415,7 +421,27 @@ def _doctor(args: argparse.Namespace) -> None:  # noqa: ARG001
     checks.append(("node", shutil.which("node") is not None, "Install Node.js LTS from https://nodejs.org/"))
     checks.append(("docker", shutil.which("docker") is not None, "Install Docker: https://docs.docker.com/get-docker/"))
 
-    env = _read_env()
+    env = {**_read_env(), **os.environ}
+    for name, setting, command, login in (
+        ("Claude", "RAY_CLAUDE_CLI_BINARY", ["auth", "status", "--json"], "claude"),
+        ("Codex", "RAY_CODEX_CLI_BINARY", ["login", "status"], "codex login"),
+    ):
+        binary = shutil.which(env.get(setting, name.lower()))
+        state = "not installed"
+        if binary:
+            state = "installed; login not verified"
+            try:
+                result = subprocess.run([binary, *command], capture_output=True, text=True,
+                                        timeout=5, env=env)
+                if name == "Claude":
+                    logged_in = json.loads(result.stdout).get("loggedIn") is True
+                else:
+                    logged_in = result.returncode == 0 and "logged in" in (
+                        result.stdout + result.stderr).lower()
+                state = "installed; logged in" if logged_in else "installed; not logged in"
+            except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+                pass
+        print(f"{name} CLI (optional): {state}; sign in with `{login}`")
     checks.append((".env exists", ENV_FILE.exists(), "Run './scripts/ray init --preset local' to create one"))
     checks.append(("RAY_API_TOKEN", bool(env.get("RAY_API_TOKEN")), "Add RAY_API_TOKEN to .env"))
     checks.append(("RAY_DATABASE_URL", bool(env.get("RAY_DATABASE_URL")), "Add RAY_DATABASE_URL to .env"))
@@ -476,6 +502,11 @@ def _init(args: argparse.Namespace) -> None:
     for key in ("GEMINI_API_KEY", "RAY_GEMINI_API_KEY"):
         if key in existing:
             env[key] = existing[key]
+
+    if args.preset == "subscriptions":
+        merged = {**existing, **os.environ}
+        if merged.get("RAY_GEMINI_API_KEY") or merged.get("GEMINI_API_KEY"):
+            env["RAY_LLM_PROVIDER"] = "gemini"
 
     _write_env(env)
     print(f"Created .env with the '{args.preset}' preset for user '{args.name}'.")

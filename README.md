@@ -81,6 +81,37 @@ and setting `RAY_LLM_PROVIDER=ollama` removes even that.
 
 ---
 
+## Use your ChatGPT / Claude subscription
+
+For personal use with an eligible ChatGPT Plus or Claude Pro subscription, install
+the official CLIs and sign in on the machine running Ray:
+
+```sh
+npm install -g @anthropic-ai/claude-code @openai/codex
+claude                 # complete Claude Code sign-in interactively
+codex login            # sign in with ChatGPT, not an API key
+./scripts/ray init --preset subscriptions  # add --force to replace an existing preset
+./scripts/ray install
+./scripts/ray start
+```
+
+Subscriptions do not include API keys. CLI access depends on your plan, vendor
+terms and usage limits; Ray does not bypass those limits. No login is performed by
+Ray. `./scripts/ray doctor` reports optional CLI installation/login status.
+
+The preset uses Gemini when a Gemini key is already present, otherwise Claude Code,
+then tries `claude_cli,codex_cli,ollama` with mock always last. Override
+`RAY_LLM_PROVIDER` / `RAY_LLM_ROUTER_PROVIDER` to select either CLI directly.
+Optional settings: `RAY_CLAUDE_CLI_MODEL`, `RAY_CODEX_CLI_MODEL`,
+`RAY_CLAUDE_CLI_BINARY=claude`, `RAY_CODEX_CLI_BINARY=codex`,
+`RAY_CLI_TIMEOUT_SECONDS=120`. Exported environment variables override `.env`.
+
+CLI providers do not support Ray function/tool calling: specialists can answer in
+prose but cannot execute Ray tools through these models. Claude tools are disabled;
+Codex is read-only in a temporary directory (not a filesystem privacy boundary).
+Codex streams completed message items, not individual tokens. Failures before the
+first output fall through to the next provider; later failures end the stream.
+
 ## Quickstart
 
 Prerequisites: Docker, Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22 with
