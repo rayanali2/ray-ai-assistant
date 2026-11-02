@@ -11,6 +11,8 @@ import {
   WorkflowPanel,
 } from "@/components/panels";
 import { StatusBar } from "@/components/status-bar";
+import { BootSequence } from "@/components/boot-sequence";
+import { Telemetry } from "@/components/telemetry";
 import {
   getDashboard,
   getHealth,
@@ -36,8 +38,10 @@ export default async function DashboardPage() {
 
   return (
     <DashboardProvider health={health} user={dashboard.user}>
-      <main className="flex h-screen flex-col">
+      <main className="hud-dashboard flex h-dvh flex-col">
+        <BootSequence health={health} agentCount={dashboard.agents.length} />
         <StatusBar />
+        <Telemetry />
 
         <div className="px-4 pt-4">
           <ApprovalQueue />
@@ -51,7 +55,7 @@ export default async function DashboardPage() {
           />
 
           {/* The panel rail: everything Ray knows, always visible (docs/09). */}
-          <aside className="grid min-h-0 grid-rows-[1.2fr_0.8fr_0.8fr_1.2fr_0.8fr_0.8fr_0.8fr] gap-4 overflow-y-auto">
+          <aside className="hud-rail grid min-h-0 gap-4 overflow-y-auto">
             <TaskPanel tasks={dashboard.tasks} overdue={dashboard.overdue_count} />
             <SchedulePanel events={dashboard.today_events} />
             <ProjectPanel projects={dashboard.projects} />
