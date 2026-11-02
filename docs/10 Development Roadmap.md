@@ -24,6 +24,15 @@ previous one.
 
 Technical decisions referenced below are recorded in `docs/adr/`.
 
+## Current implementation summary
+
+Phases below record the delivery sequence, not a promise that every original design
+goal is verified on every platform. Main includes Electron (v0.2.1 release), Mac
+user-local bootstrap/automatic provider selection, official Claude/Codex CLI
+providers, ffmpeg decoding for local STT, live Google Calendar/Notion adapters,
+and per-model Gemini quota cooldown/fallback. See README for current commands.
+Docker installation and model/account setup still require user action.
+
 ---
 
 # Phase 0 — Decisions and Scaffolding
@@ -88,8 +97,8 @@ Create the main Ray interaction system.
 ## Tasks
 
 * `LLMProvider` abstraction with the Gemini and Ollama adapters, plus a `mock` provider
-  that terminates the fallback chain (ADR-0001, ADR-0015). Groq is deferred to the phase
-  that introduces routing, since nothing routes yet.
+  that terminates the fallback chain (ADR-0001, ADR-0015). Groq remains deferred;
+  routing now uses the configured provider chain, including subscription CLIs.
 * Executive Agent in single-agent mode (no routing yet)
 * `POST /chat/message` streaming over SSE (ADR-0007)
 * Conversation and message persistence, conversation history
@@ -185,8 +194,8 @@ Connect Ray with the user's existing tools, in priority order (ADR-0010).
 * Task, Project, and Calendar views; project dashboards with progress
 * **GitHub (priority 1):** read-only repository tree, file contents, commits, issues
 * **Calendar (priority 2):** local calendar as default, ICS import/export, optional
-  Google Calendar sync behind the same adapter
-* **Knowledge (priority 3):** Obsidian vault read/create/link; Notion optional
+  live Google Calendar OAuth reads and approved create/update/delete (not background sync)
+* **Knowledge (priority 3):** Obsidian vault read/create/link; implemented optional Notion search/read/create/append
 * **Local files (priority 4):** read and summarise within allow-listed directories
 * Integration API and a settings page with per-integration permission controls
 
@@ -206,8 +215,10 @@ Deliver the voice-first experience properly.
 
 ## Status
 
-**Hardened and merge-ready.** Local STT/TTS/wake are genuinely usable and can be set up
-with one download script. The browser fallback remains available by default.
+**Merged.** Optional local STT/TTS and backend wake detection are implemented.
+Compressed recordings are decoded by ffmpeg; missing ffmpeg reports a clear error.
+The HUD's local path is push-to-talk; browser wake mode uses Web Speech and may send
+audio to the browser vendor. Continuous local HUD wake capture remains backlog.
 
 ## Tasks
 
@@ -235,7 +246,7 @@ with one download script. The browser fallback remains available by default.
 * [x] `uv run python scripts/download_voice_models.py` downloads the required voice model(s)
   and the local STT/TTS pipeline runs
 * [x] the user says "Ray" or "Jarvis", speaks a request, and hears a natural spoken answer
-* [x] the wake word runs locally and no audio leaves the machine before activation
+* [ ] Continuous local HUD wake capture with no vendor audio upload before activation
 
 ---
 
@@ -392,9 +403,11 @@ Hide the terminal/Docker/backend/frontend setup behind a one-click installable a
 
 ## Status
 
-V1 packaging complete. Ray can be installed and launched with a single command on
-macOS/Linux, and the macOS `.app` bundle builder is provided. The backend and frontend
-continue to work as a normal web deployment; the package layer only orchestrates them.
+Electron desktop packaging is implemented: unsigned arm64/x64 DMG/ZIP (v0.2.1),
+tray/menu, checkout installer, global voice shortcut and managed-runtime PATH.
+Docker Desktop/Apple tools can require user interaction; runtimes are not bundled.
+The shell `.app` builder remains a lightweight alternative. Linux has AppImage
+packaging; native macOS behavior still needs platform-specific verification.
 
 ## Tasks
 
@@ -424,7 +437,9 @@ built-in skills, autonomous scheduled workflows, and a refined install/desktop e
 
 ## Status
 
-Complete. All features are merged into `main`.
+The delivered HUD, utilities, workflows and Electron shell are merged into `main`.
+Remaining items and verification limits are listed below; this is not a claim that
+all original voice/privacy or platform goals are complete.
 
 ## Tasks
 
@@ -446,7 +461,8 @@ Complete. All features are merged into `main`.
 * Linux Flatpak distribution (AppImage packaging is available for local verification)
 * "Ray" and "Jarvis" wake-word aliases with per-alias confirmation tones
 * Cinematic Iron Man/JARVIS reactor-style HUD polish (ambient glow, voice-driven visual state)
-* Future specialized agents/workflows for fitness, content creation, personal finance, and other productivity domains
+* Additional capabilities for the existing fitness, content and finance agents
+* Continuous local HUD wake-word capture (browser wake currently uses Web Speech)
 
 ---
 

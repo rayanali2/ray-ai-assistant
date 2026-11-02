@@ -4,6 +4,10 @@
 
 Accepted. Supersedes the `/auth/register|login|logout` endpoints in `docs/08` for V1.
 
+Amended by ADR-0021: Google's loopback callback is bearer-exempt and protected by
+single-use expiring state plus PKCE. Health and FastAPI's generated documentation
+are public. Other application data/action endpoints still require the bearer token.
+
 ## Context
 
 `docs/08` specified a full registration and session system. `docs/01` says Ray V1 is for

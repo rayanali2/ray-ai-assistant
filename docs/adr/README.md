@@ -38,3 +38,11 @@ Status is one of `Accepted`, `Superseded by ADR-XXXX`, or `Proposed`.
 | [0018](0018-local-voice-pipeline.md) | Local voice providers behind optional model downloads | Accepted (extends 0009) |
 | [0019](0019-subscription-cli-providers.md) | Personal subscription CLI providers and ordered fallbacks | Accepted |
 | [0020](0020-electron-desktop-shell.md) | Electron desktop shell and unsigned packaging | Accepted |
+| [0021](0021-google-calendar-and-notion.md) | Google Calendar OAuth and Notion adapters | Accepted |
+| [0022](0022-gemini-quota-cooldowns.md) | Per-model Gemini quota cooldowns and actual-answer attribution | Accepted |
+
+Historical ADR examples describe the decision at the time. For runnable commands
+and current defaults use README and `.env.example`. In particular, 0018 extends
+0009's voice design, 0021 adds the bearer-exempt OAuth callback to 0006, and 0022
+extends provider degradation. Local embeddings do not prevent retrieved memories
+from entering hosted-model prompts; see the current privacy documentation.

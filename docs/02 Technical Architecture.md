@@ -399,7 +399,7 @@ Functions:
 
 ## GitHub Tool
 
-Future capability:
+Implemented read-only capability (writes remain future work):
 
 * inspect repositories
 * track issues
@@ -409,7 +409,8 @@ Future capability:
 
 ## Web Research Tool
 
-Future capability:
+Implemented utility tools cover web search, Wikipedia and news; richer research
+automation remains future work:
 
 * research topics
 * gather information
@@ -423,7 +424,8 @@ Future capability:
 Phase 1, even though its implementation quality improves across phases:
 
 ```
-Microphone → Wake word (client) → VAD → STT (server) → Ray Core → TTS → Speaker
+Browser: Microphone → Web Speech/transcript wake filter → Ray Core → SpeechSynthesis
+Local:   Microphone → MediaRecorder → ffmpeg/STT (local backend) → Ray Core → Piper
 ```
 
 Consequences for the rest of the architecture:
@@ -432,8 +434,10 @@ Consequences for the rest of the architecture:
   the voice path, not the other way around.
 * Agents produce a `speech_text` variant alongside their markdown output, because a good
   spoken answer is shorter and contains no code blocks.
-* Wake-word detection runs **in the client** so audio never leaves the machine before
-  activation; post-activation audio streams over `/voice/stream`.
+* Browser wake filtering runs on transcripts; the browser speech service may receive
+  audio before activation. The HUD's local `/voice/stream` path is push-to-talk.
+  Backend wake detection exists for continuous-audio clients, but continuous local
+  capture is not implemented in the HUD. See README and ADR-0018 for current setup.
 
 Chosen components, all free and local: openWakeWord, `faster-whisper`, and Piper, with
 browser Web Speech / SpeechSynthesis as zero-setup fallbacks.

@@ -375,10 +375,12 @@ order (ADR-0010):
    Write access is post-V1 and always requires per-call approval.
 3. **Calendar** — `LocalCalendar` is the default with ICS import/export. Google Calendar
    is **opt-in** behind the same adapter because it requires a Google Cloud project and
-   OAuth consent, which conflicts with the easy-setup requirement in `docs/13`.
+   OAuth consent. Implemented via PKCE/loopback OAuth; events are read live, not
+   bidirectionally synchronized. Create/update/delete require per-call approval.
 4. **Knowledge — Obsidian first.** An Obsidian vault is a directory of markdown files:
    local, free, no API, no auth. Notion is a second implementation of the same adapter
-   and is optional.
+   and is implemented but optional: token/shared pages, paginated search/read,
+   approved create/append. See README and ADR-0021 for credentials and limitations.
 5. **Local files** — read and summarise within explicitly allow-listed directories only.
 
 ---

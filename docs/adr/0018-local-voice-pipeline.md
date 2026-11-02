@@ -4,6 +4,12 @@
 
 Accepted. Extends ADR-0009.
 
+Current client limitation: backend wake detection exists, but the HUD's local
+MediaRecorder path is push-to-talk only. Browser wake mode uses Web Speech and
+can upload audio to the browser vendor before activation. WebM/Ogg/MP4 recordings
+are decoded by ffmpeg; missing ffmpeg reports an error. Continuous local wake
+capture remains future work, rather than a verified end-to-end HUD capability.
+
 ## Context
 
 Phase 6 must add a fully local speech pipeline (wake word, STT, TTS) while keeping the

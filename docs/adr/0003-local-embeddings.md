@@ -4,6 +4,10 @@
 
 Accepted.
 
+Implementation clarification: local embedding does not mean all memory text stays
+local. Retrieved memories are included in chat prompts and can reach the selected
+hosted/CLI provider. Embedding/storage stay local; see current `docs/12` privacy rules.
+
 ## Context
 
 Semantic memory retrieval needs embeddings. `docs/05` requires free, open-source

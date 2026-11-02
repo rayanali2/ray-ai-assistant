@@ -219,6 +219,11 @@ truthful while the model is being waited on. Phase 2 fills these states with the
 browser speech APIs behind one hook; replacing them with faster-whisper, Piper, and
 openWakeWord changes nothing above the hook (ADR-0009).
 
+Current behavior: local STT/TTS is implemented through `/voice/stream`, with ffmpeg
+decoding for browser containers. The local HUD path is push-to-talk; continuous
+local wake capture is not implemented. Browser wake mode is not a local-audio privacy
+boundary because speech recognition may upload audio before the transcript filter.
+
 Two constraints that are easy to get wrong:
 
 * **Arming requires a user gesture.** Browsers only grant microphone permission from

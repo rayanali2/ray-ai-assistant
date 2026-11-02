@@ -453,7 +453,10 @@ The Memory Agent should:
 
 # 7. Future Agents
 
-The architecture should support additional agents.
+The architecture should support additional agents. Fitness, content and finance
+agents are already implemented with tool allow-lists in `ray/agents/registry.py`;
+the finance/content ideas in this section describe possible extensions, not absent
+agent modules. Career-specific functionality remains a future direction.
 
 Possible future agents:
 

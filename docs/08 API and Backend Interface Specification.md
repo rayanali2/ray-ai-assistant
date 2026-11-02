@@ -77,14 +77,15 @@ Approach (ADR-0007):
 **V1: single local user, static bearer token (ADR-0006).**
 
 There is no registration or login in V1. One user row is seeded at setup. Every request
-outside `/health` must carry:
+outside `/health` and the state/PKCE-protected Google OAuth callback must carry
+(FastAPI's generated API documentation is also public):
 
 ```
 Authorization: Bearer $RAY_API_TOKEN
 ```
 
 The backend binds to `127.0.0.1` by default. Identity is resolved in exactly one place,
-the `get_current_user()` dependency, so real authentication is a single-file
+the `get_current_user_id()` dependency, so real authentication is a single-file
 replacement later.
 
 Endpoints:
@@ -372,15 +373,14 @@ GET /calendar
 
 POST /calendar/event
 
-PUT /calendar/event/{id}
+PATCH /calendar/event/{id}
 
 DELETE /calendar/event/{id}
 ```
 
-Future support:
-
-* Google Calendar integration
-* Notion calendar integration
+Local calendar/ICS is implemented. Google Calendar tools read/write the remote
+calendar; the dashboard merges remote and local events. Notion is a knowledge
+integration, not a calendar sync provider. See ADR-0021 and README setup steps.
 
 ---
 
@@ -395,7 +395,13 @@ Endpoints:
 ```
 GET /integrations
 
-POST /integrations/connect
+POST /integrations
+
+GET /integrations/connections
+GET /integrations/google/auth-url  -- authenticated; returns consent URL
+GET /integrations/google/callback -- bearer-exempt, single-use state + PKCE
+GET /integrations/{id}
+PATCH /integrations/{id}
 
 POST /integrations/{id}/check      -- health check, powers self-diagnosis
 
@@ -410,7 +416,8 @@ Examples, in V1 priority order (ADR-0010):
 4. Local files (allow-listed directories only)
 
 Credentials are never sent to or returned by this API — only a reference to where the
-secret is stored.
+secret is stored. The Google callback exchanges an authorization code and persists
+tokens privately; it does not accept or return a refresh token in the HUD API.
 
 ---
 
