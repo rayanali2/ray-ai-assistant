@@ -149,6 +149,8 @@ class OllamaProvider(LLMProvider):
         }
         try:
             async with self._client.stream("POST", "/api/chat", json=payload) as response:
+                if not response.is_success:
+                    await response.aread()
                 response.raise_for_status()
                 # Ollama streams newline-delimited JSON, not SSE.
                 async for line in response.aiter_lines():
@@ -161,7 +163,7 @@ class OllamaProvider(LLMProvider):
                     if event.get("done"):
                         break
         except httpx.HTTPStatusError as exc:
-            raise ProviderRequestError(str(exc), provider=self.name) from exc
+            raise _translate_status(exc) from exc
         except httpx.HTTPError as exc:
             raise ProviderUnavailableError(str(exc), provider=self.name) from exc
         yield Chunk(is_final=True)

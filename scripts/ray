@@ -313,6 +313,9 @@ def _install(args: argparse.Namespace) -> None:
     _run(["pnpm", "install"], cwd=FRONTEND)
 
     if args.voice:
+        if not shutil.which("ffmpeg"):
+            print("\nLocal browser voice requires ffmpeg on PATH to decode WebM/Ogg/MP4. "
+                  "See README: Running voice locally (no cloud STT/TTS).")
         print("\nDownloading optional voice models...")
         _run(["uv", "run", "python", "scripts/download_voice_models.py"], cwd=BACKEND, check=False)
 
@@ -422,6 +425,10 @@ def _doctor(args: argparse.Namespace) -> None:  # noqa: ARG001
     checks.append(("pnpm", shutil.which("pnpm") is not None, "Install from https://pnpm.io/installation"))
     checks.append(("node", shutil.which("node") is not None, "Install Node.js LTS from https://nodejs.org/"))
     checks.append(("docker", shutil.which("docker") is not None, "Install Docker: https://docs.docker.com/get-docker/"))
+
+    ffmpeg = shutil.which("ffmpeg")
+    print("ffmpeg (optional local voice): " + ("installed" if ffmpeg else
+          "not installed; required for browser audio. See README local voice setup: https://ffmpeg.org/download.html"))
 
     env = {**_read_env(), **os.environ}
     for name, setting, command, login in (

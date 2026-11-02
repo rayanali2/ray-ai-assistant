@@ -7,6 +7,28 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.parametrize("installed", [False, True])
+def test_doctor_reports_optional_ffmpeg(monkeypatch, capsys, installed):
+    launcher = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "ray"))
+    globals_ = launcher["_doctor"].__globals__
+    monkeypatch.setattr(
+        globals_["shutil"],
+        "which",
+        lambda name: "/bin/ffmpeg" if name == "ffmpeg" and installed else None,
+    )
+    monkeypatch.setitem(globals_, "_read_env", lambda: {})
+    monkeypatch.setitem(globals_, "_service_port", lambda *args: False)
+    with pytest.raises(SystemExit):
+        launcher["_doctor"](argparse.Namespace())
+    output = capsys.readouterr().out
+    assert (
+        "ffmpeg (optional local voice): " + ("installed" if installed else "not installed")
+        in output
+    )
+    if not installed:
+        assert "required for browser audio" in output
+
+
 @pytest.mark.parametrize(
     ("contents", "exported", "expected"),
     [

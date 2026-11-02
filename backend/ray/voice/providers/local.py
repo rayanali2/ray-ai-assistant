@@ -102,25 +102,42 @@ def _ensure_wav(audio: bytes, sample_rate: int) -> bytes:
 
 async def _ffmpeg_to_wav(audio: bytes) -> bytes:
     """Convert any audio ffmpeg understands to 16-bit 16 kHz mono WAV."""
-    proc = await asyncio.create_subprocess_exec(
-        "ffmpeg",
-        "-i",
-        "-",
-        "-ar",
-        "16000",
-        "-ac",
-        "1",
-        "-f",
-        "wav",
-        "-",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "pipe:0",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            "pipe:1",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise VoiceError(
+            "ffmpeg is required to decode browser audio (WebM/Ogg/MP4). "
+            "Install ffmpeg, ensure it is on PATH, and restart Ray; see README local voice setup."
+        ) from exc
     stdout, stderr = await proc.communicate(input=audio)
     if proc.returncode != 0:
         raise VoiceError(f"ffmpeg failed: {stderr.decode(errors='ignore')[:200]}")
     return stdout
+
+
+def _is_encoded_audio(audio: bytes) -> bool:
+    return audio.startswith(
+        (b"\x1a\x45\xdf\xa3", b"OggS", b"fLaC", b"ID3", b"FORM", b"caff")
+    ) or audio[4:8] in (b"ftyp", b"moov", b"mdat")
 
 
 class LocalSpeechToText:
@@ -150,17 +167,16 @@ class LocalSpeechToText:
         if not audio:
             return Transcript(text="", confidence=1.0, language="en")
 
+        wav = (
+            await _ffmpeg_to_wav(audio)
+            if _is_encoded_audio(audio)
+            else _ensure_wav(audio, sample_rate)
+        )
+        audio_file = io.BytesIO(wav)
+
         if self._model is None:
             self._model = _Lazy(self._load)
         model = await asyncio.to_thread(self._model.get)
-
-        # Try a WAV header first; if the client sent raw WebM/MP3, ask ffmpeg to
-        # normalise it. This keeps the WebSocket protocol simple: the client can
-        # send whatever the browser microphone produces.
-        try:
-            audio_file = io.BytesIO(_ensure_wav(audio, sample_rate))
-        except Exception:
-            audio_file = io.BytesIO(await _ffmpeg_to_wav(audio))
 
         segments, info = await asyncio.to_thread(
             model.transcribe,
