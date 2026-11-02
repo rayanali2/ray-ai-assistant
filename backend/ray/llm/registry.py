@@ -87,6 +87,7 @@ class ProviderRegistry:
         self._settings = settings or get_settings()
         self._instances: dict[str, LLMProvider] = {}
         self._unavailable: dict[str, str] = {}
+        self.active_provider: str | None = None
 
     # -- chain construction -------------------------------------------------
 
@@ -149,7 +150,10 @@ class ProviderRegistry:
         last: LLMError | None = None
         for provider in self._available(self.chain(role)):
             try:
-                return await provider.complete(request)
+                completion = await provider.complete(request)
+                if role == "agent":
+                    self.active_provider = provider.name
+                return completion
             except LLMError as exc:
                 last = self._handle(exc, provider, on_degrade)
                 if not exc.is_retryable:
@@ -175,6 +179,8 @@ class ProviderRegistry:
             try:
                 async for chunk in provider.stream(request):
                     started = True
+                    if role == "agent":
+                        self.active_provider = provider.name
                     yield chunk
                 return
             except LLMError as exc:

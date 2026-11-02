@@ -20,6 +20,8 @@ router = APIRouter(tags=["health"])
 
 
 def _llm_status() -> str:
+    if get_registry().active_provider:
+        return get_registry().active_provider or "unconfigured"
     for info in get_registry().describe():
         if info.configured:
             return info.name
@@ -59,14 +61,16 @@ async def health(
 
     if database != "connected":
         diagnostics["suggestion"] = "Check DATABASE_URL and that Postgres is running."
-    elif llm_status == "unconfigured":
-        diagnostics["suggestion"] = "Set RAY_GEMINI_API_KEY or run Ollama locally."
+    elif llm_status in {"unconfigured", "mock"}:
+        diagnostics["suggestion"] = (
+            "No model configured — add a Gemini key in desktop Preferences or run Ollama."
+        )
 
     return HealthResponse(
         status="ok" if database == "connected" else "degraded",
         version=__version__,
         database=database,
-        llm_provider=settings.llm_provider,
+        llm_provider=llm_status,
         diagnostics=diagnostics,
         voice=VoiceCapabilities(
             stt_backend=caps.stt_backend,

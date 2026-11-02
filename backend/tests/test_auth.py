@@ -20,6 +20,15 @@ async def test_health_reports_voice_capabilities(client: AsyncClient) -> None:
     assert voice["stt_backend"] in {"browser", "local"}
 
 
+async def test_health_reports_actual_mock_provider(client: AsyncClient, monkeypatch) -> None:
+    from ray.llm.registry import get_registry
+
+    monkeypatch.setattr(get_registry(), "active_provider", "mock")
+    health = (await client.get("/health")).json()
+    assert health["llm_provider"] == "mock"
+    assert "add a Gemini key" in health["diagnostics"]["suggestion"]
+
+
 async def test_protected_routes_reject_missing_token(client: AsyncClient) -> None:
     for path in PROTECTED:
         assert (await client.get(path)).status_code == 401, path

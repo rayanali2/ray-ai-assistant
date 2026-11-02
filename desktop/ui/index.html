@@ -21,9 +21,13 @@
     <div class="eyebrow">NEURAL INTERFACE / DESKTOP</div>
     <h1 id="message">Initializing Ray…</h1>
     <p id="hint">Connecting your local intelligence systems.</p>
+    <label id="key-label" for="gemini-key">Gemini API key (optional; free at aistudio.google.com)
+      <input id="gemini-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Paste a key for real AI chat">
+    </label>
     <div class="actions">
       <button id="choose" data-action="choose">Choose existing folder…</button>
       <button id="install" data-action="install">Install Ray</button>
+      <button id="save-key" data-action="save-key">Save key and restart</button>
       <button id="retry" data-action="retry">Retry</button>
       <button id="doctor" data-action="doctor">Run doctor</button>
       <button id="logs" data-action="logs">Open logs</button>

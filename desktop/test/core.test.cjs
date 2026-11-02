@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds } = require("../core.cjs");
+const { isCheckout, readConfig, writeConfig, findCheckout, buildPath, isLocal, externalURL, windowBounds, geminiEnvironment } = require("../core.cjs");
 
 test("checkout search validates candidates and respects precedence", (t) => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ray-desktop-test-"));
@@ -33,6 +33,46 @@ test("PATH includes login shell, GUI tool locations and inherited tools", () => 
   const value = buildPath("/custom/node/bin:/usr/bin", "/Users/ray", "/usr/bin:/other").split(":");
   for (const item of ["/custom/node/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Users/ray/.local/bin", "/Users/ray/.cargo/bin", "/Applications/Docker.app/Contents/Resources/bin", "/other"]) assert.ok(value.includes(item));
   assert.equal(value.filter((item) => item === "/usr/bin").length, 1);
+  assert.ok(value.includes("/Users/ray/.local/share/pnpm"));
+});
+
+test("optional key is passed only as an environment value and rejects dotenv injection", () => {
+  assert.deepEqual(geminiEnvironment(""), {});
+  assert.deepEqual(geminiEnvironment("test-key"), { RAY_GEMINI_API_KEY: "test-key" });
+  for (const key of [null, {}, "bad\nRAY_API_TOKEN=x", "quoted key", "x".repeat(513)]) assert.throws(() => geminiEnvironment(key));
+});
+
+test("setup bridge forwards key separately, not in the action name", () => {
+  const vm = require("node:vm");
+  let bridge;
+  let invocation;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../setup-preload.cjs"), "utf8"), {
+    require: () => ({ contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } }, ipcRenderer: { invoke: (...args) => { invocation = args; } } }),
+  });
+  bridge.action("install", "test-key");
+  assert.deepEqual(invocation, ["ray:setup-action", "install", "test-key"]);
+});
+
+test("setup clears the key after sending and permits installation retry after errors", () => {
+  const vm = require("node:vm");
+  const elements = new Map();
+  const actions = ["choose", "install", "save-key", "retry", "doctor", "logs"];
+  for (const name of [...actions, "output", "message", "hint", "key-label", "gemini-key", "close"]) elements.set(`#${name}`, { value: "", dataset: { action: name }, addEventListener(_event, callback) { this.click = callback; } });
+  let update;
+  let invocation;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../ui/renderer.js"), "utf8"), {
+    document: { body: { dataset: {} }, querySelector: (selector) => elements.get(selector), querySelectorAll: () => actions.map((name) => elements.get(`#${name}`)) },
+    window: { raySetup: { onStatus: (callback) => { update = callback; }, action: (...args) => { invocation = args; return Promise.resolve(); } } },
+  });
+  elements.get("#gemini-key").value = "test-key";
+  elements.get("#install").click();
+  assert.deepEqual(invocation, ["install", "test-key"]);
+  assert.equal(elements.get("#gemini-key").value, "");
+  update({ mode: "error", allowInstall: true, logs: "", message: "Docker missing", busy: false });
+  assert.equal(elements.get("#install").hidden, false);
+  assert.equal(elements.get("#key-label").hidden, false);
+  update({ mode: "setup", allowInstall: false, logs: "", message: "Preferences", busy: false });
+  assert.equal(elements.get("#save-key").hidden, false);
 });
 
 test("localhost navigation is exact and external URL schemes are restricted", () => {
