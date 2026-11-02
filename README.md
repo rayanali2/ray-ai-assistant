@@ -87,7 +87,7 @@ Prerequisites: Docker, Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 2
 pnpm.
 
 ```bash
-git clone https://github.com/syedrayanali08-creator/ray-ai-assistant.git
+git clone https://github.com/rayanali2/ray-ai-assistant.git
 cd ray-ai-assistant
 
 ./scripts/ray init --preset local   # creates .env (or gemini/fast if you have a key)
@@ -95,9 +95,18 @@ cd ray-ai-assistant
 
 ./scripts/ray install               # dependencies, Postgres, migrations, seed data
 ./scripts/ray start                 # opens http://localhost:3000
+```
 
-# Or, all-in-one:
-# ./scripts/install.sh
+Or run everything at once:
+
+```bash
+./scripts/install.sh
+```
+
+One-line installer (macOS / Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rayanali2/ray-ai-assistant/main/scripts/install.sh | bash
 ```
 
 Open http://localhost:3000 and the dashboard shows the seeded project, tasks, schedule,
@@ -106,12 +115,16 @@ Run `./scripts/ray doctor` to verify your local setup.
 
 ### macOS app bundle
 
+The `.app` wrapper is built after you have run the terminal quickstart once:
+
 ```bash
-./scripts/build-macos-app.sh     # creates /Applications/Ray.app
+./scripts/build-macos-app.sh     # copies macos/Ray.app to /Applications
 ```
 
-Run it from Launchpad or Finder; it starts the backend and opens the HUD. The app bundle
-references this checkout, so keep the repo in place or rebuild the app after moving it.
+Run it from Launchpad or Finder; it starts the backend and opens the HUD. `Ray.app`
+wraps `./scripts/ray start` and references this checkout, so keep the repo in place
+or rebuild the app after moving it. If you have not run `./scripts/ray install` yet,
+the app will fail to start because dependencies and the database are not initialized.
 
 ### Linux desktop entry
 

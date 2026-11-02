@@ -40,13 +40,13 @@ PRESETS: dict[str, dict[str, str]] = {
     "local": {
         "RAY_LLM_PROVIDER": "ollama",
         "RAY_LLM_FALLBACK_PROVIDER": "mock",
-        "RAY_EMBEDDINGS_PROVIDER": "hash",
+        "RAY_EMBEDDING_BACKEND": "hashing",
     },
     "gemini": {
         "RAY_LLM_PROVIDER": "gemini",
         "RAY_LLM_FALLBACK_PROVIDER": "ollama,mock",
         "RAY_GEMINI_MODEL": "gemini-3.6-flash",
-        "RAY_EMBEDDINGS_PROVIDER": "sentence-transformers",
+        "RAY_EMBEDDING_BACKEND": "sentence-transformers",
     },
     "fast": {
         "RAY_LLM_PROVIDER": "gemini",
@@ -54,7 +54,7 @@ PRESETS: dict[str, dict[str, str]] = {
         "RAY_GEMINI_MODEL": "gemini-3.6-flash",
         "RAY_GEMINI_TIMEOUT_MS": "15000",
         "RAY_GEMINI_RETRY_ATTEMPTS": "1",
-        "RAY_EMBEDDINGS_PROVIDER": "sentence-transformers",
+        "RAY_EMBEDDING_BACKEND": "sentence-transformers",
     },
 }
 
@@ -200,6 +200,78 @@ def _ensure_postgres() -> None:
     sys.exit(1)
 
 
+def _repair_migrations() -> None:
+    """Drop a stale alembic_version marker if the application tables are missing.
+
+    This can happen when the Postgres container is reused after a partial reset.
+    It only removes the version marker; no user data is touched because the tables
+    it governs are already absent.
+    """
+    has_version = (
+        subprocess.run(
+            [
+                "docker",
+                "exec",
+                "ray-postgres",
+                "psql",
+                "-U",
+                "ray",
+                "-d",
+                "ray",
+                "-At",
+                "-c",
+                "SELECT to_regclass('public.alembic_version') IS NOT NULL;",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        .stdout.strip()
+        .lower()
+    )
+    has_users = (
+        subprocess.run(
+            [
+                "docker",
+                "exec",
+                "ray-postgres",
+                "psql",
+                "-U",
+                "ray",
+                "-d",
+                "ray",
+                "-At",
+                "-c",
+                "SELECT to_regclass('public.users') IS NOT NULL;",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        .stdout.strip()
+        .lower()
+    )
+    if has_version == "t" and has_users != "t":
+        print(
+            "WARNING: alembic_version table exists but application tables are missing; repairing..."
+        )
+        subprocess.run(
+            [
+                "docker",
+                "exec",
+                "ray-postgres",
+                "psql",
+                "-U",
+                "ray",
+                "-d",
+                "ray",
+                "-c",
+                "DROP TABLE IF EXISTS alembic_version;",
+            ],
+            check=True,
+        )
+
+
 def _install(args: argparse.Namespace) -> None:
     _require(
         "uv",
@@ -220,11 +292,13 @@ def _install(args: argparse.Namespace) -> None:
     print("\nInstalling backend dependencies...")
     _run(["uv", "sync"], cwd=BACKEND)
 
+    _repair_migrations()
+
     print("\nRunning database migrations...")
     _run(["uv", "run", "alembic", "upgrade", "head"], cwd=BACKEND)
 
     print("\nSeeding default user and sample data...")
-    _run(["uv", "run", "python", "scripts/seed.py"], cwd=BACKEND, check=False)
+    _run(["uv", "run", "python", "scripts/seed.py"], cwd=BACKEND)
 
     print("\nInstalling frontend dependencies...")
     _run(["pnpm", "install"], cwd=FRONTEND)
