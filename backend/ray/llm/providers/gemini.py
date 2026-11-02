@@ -5,6 +5,8 @@ error here: the provider reports itself unconfigured and the registry picks the
 fallback.
 """
 
+import math
+import time
 from collections.abc import AsyncIterator
 
 from google import genai
@@ -22,6 +24,7 @@ from ray.llm.base import (
     RateLimitedError,
     ToolCall,
 )
+from ray.llm.quota import quota_delay
 
 # The alias, not a pinned version: pinned free-tier models get their quota
 # retired, and an alias keeps working when that happens.
@@ -107,8 +110,13 @@ class GeminiProvider(LLMProvider):
         model: str = DEFAULT_MODEL,
         timeout_ms: int = DEFAULT_TIMEOUT_MS,
         retry_attempts: int = 1,
+        fallback_models: str = "gemini-flash-lite-latest",
     ) -> None:
         self._model = model
+        self._models = tuple(
+            dict.fromkeys([model, *(m.strip() for m in fallback_models.split(",") if m.strip())])
+        )
+        self._cooldowns: dict[str, tuple[float, str]] = {}
         # Disable SDK-level retries on 5xx/timeout: the registry already handles
         # fallback across providers. Retrying the same overloaded endpoint is what
         # produces the 60-90 second hangs for a simple greeting.
@@ -123,7 +131,39 @@ class GeminiProvider(LLMProvider):
             ),
         )
 
+    def _quota_error(self, model: str, exc: genai_errors.APIError) -> Exception:
+        if exc.code == 429:
+            delay, scope = quota_delay(exc.details)
+            self._cooldowns[model] = (time.monotonic() + delay, scope)
+            return RateLimitedError(self._quota_detail(model), provider=self.name)
+        return _translate(exc)
+
+    def _quota_detail(self, model: str) -> str:
+        until, scope = self._cooldowns[model]
+        seconds = max(0, until - time.monotonic())
+        remaining = f"{math.ceil(seconds / 3600)}h" if seconds >= 3600 else f"{math.ceil(seconds)}s"
+        return f"Gemini {scope} quota used up ({model}) — resets in {remaining}"
+
+    def _available_models(self) -> list[str]:
+        now = time.monotonic()
+        self._cooldowns = {m: state for m, state in self._cooldowns.items() if state[0] > now}
+        return [model for model in self._models if model not in self._cooldowns]
+
+    def cooldown_detail(self) -> str:
+        return self.info().detail if not self._available_models() else ""
+
     async def complete(self, request: CompletionRequest) -> Completion:
+        last: Exception = RateLimitedError(self.cooldown_detail(), provider=self.name)
+        for model in self._available_models():
+            try:
+                return await self._complete_model(request, model)
+            except genai_errors.APIError as exc:
+                last = self._quota_error(model, exc)
+                if exc.code != 429:
+                    raise last from exc
+        raise last
+
+    async def _complete_model(self, request: CompletionRequest, model: str) -> Completion:
         # Use the streaming endpoint even for "non-streaming" tool-calling.
         # generate_content (non-stream) waits for the full response and, under
         # load, hangs for 30-90s before returning a 503. generate_content_stream
@@ -132,50 +172,59 @@ class GeminiProvider(LLMProvider):
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
         usage = None
-        try:
-            stream = await self._client.aio.models.generate_content_stream(
-                model=self._model,
-                contents=_to_contents(request),
-                config=_to_config(request),
-            )
-            async for event in stream:
-                if event.usage_metadata:
-                    usage = event.usage_metadata
-                if event.text:
-                    text_parts.append(event.text)
-                if event.function_calls:
-                    tool_calls.extend(
-                        ToolCall(name=call.name or "", arguments=dict(call.args or {}))
-                        for call in event.function_calls
-                    )
-        except genai_errors.APIError as exc:
-            raise _translate(exc) from exc
+        stream = await self._client.aio.models.generate_content_stream(
+            model=model,
+            contents=_to_contents(request),
+            config=_to_config(request),
+        )
+        async for event in stream:
+            if event.usage_metadata:
+                usage = event.usage_metadata
+            if event.text:
+                text_parts.append(event.text)
+            if event.function_calls:
+                tool_calls.extend(
+                    ToolCall(name=call.name or "", arguments=dict(call.args or {}))
+                    for call in event.function_calls
+                )
 
         return Completion(
             text="".join(text_parts),
             tool_calls=tuple(tool_calls),
             provider=self.name,
-            model=self._model,
+            model=model,
             input_tokens=usage.prompt_token_count if usage else None,
             output_tokens=usage.candidates_token_count if usage else None,
         )
 
     async def stream(self, request: CompletionRequest) -> AsyncIterator[Chunk]:
-        try:
-            stream = await self._client.aio.models.generate_content_stream(
-                model=self._model,
-                contents=_to_contents(request),
-                config=_to_config(request),
-            )
-            async for event in stream:
-                if event.text:
-                    yield Chunk(text=event.text)
-        except genai_errors.APIError as exc:
-            raise _translate(exc) from exc
-        yield Chunk(is_final=True)
+        last: Exception = RateLimitedError(self.cooldown_detail(), provider=self.name)
+        for model in self._available_models():
+            started = False
+            try:
+                stream = await self._client.aio.models.generate_content_stream(
+                    model=model, contents=_to_contents(request), config=_to_config(request)
+                )
+                async for event in stream:
+                    if event.text:
+                        started = True
+                        yield Chunk(text=event.text)
+                yield Chunk(is_final=True)
+                return
+            except genai_errors.APIError as exc:
+                last = self._quota_error(model, exc)
+                if started or exc.code != 429:
+                    raise last from exc
+        raise last
 
     def info(self) -> ProviderInfo:
-        return ProviderInfo(name=self.name, model=self._model, configured=True)
+        available = self._available_models()
+        detail = "; ".join(
+            self._quota_detail(model) for model in self._models if model in self._cooldowns
+        )
+        return ProviderInfo(
+            name=self.name, model=self._model, configured=bool(available), detail=detail
+        )
 
     def supports_tools(self) -> bool:
         return True

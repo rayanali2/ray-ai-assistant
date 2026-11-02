@@ -31,7 +31,8 @@ export function Telemetry() {
       <div className="flex flex-wrap gap-x-6 gap-y-1">
         <span>CORE <b className={liveHealth?.status === "ok" ? "text-hud-accent" : "text-hud-warn"}>{liveHealth?.status === "ok" ? "ONLINE" : "OFFLINE"}</b></span>
         <span>MODEL <b>{liveHealth?.llm_provider ?? "UNAVAILABLE"}</b></span>
-        {liveHealth?.llm_provider === "mock" && <span className="text-hud-warn" role="status">CANNED REPLIES — add a Gemini key in desktop Preferences or configure Ollama</span>}
+        {liveHealth?.diagnostics?.gemini_quota && <span className="text-hud-warn" role="status">{liveHealth.diagnostics.gemini_quota}</span>}
+        {liveHealth?.llm_provider === "mock" && <span className="text-hud-warn" role="status">CANNED REPLIES — {liveHealth?.diagnostics?.gemini_quota ? "no live provider answered; try a subscription CLI or Ollama" : "add a Gemini key in desktop Preferences or configure Ollama"}</span>}
         <span>MEM <b>{liveHealth?.database ?? "UNKNOWN"}</b></span>
         <time dateTime={now?.toISOString()}>{now ? `${now.toLocaleDateString(undefined, { month: "short", day: "2-digit" })} / ${now.toLocaleTimeString([], { hour12: false })}` : "SYNCING CLOCK"}</time>
       </div>

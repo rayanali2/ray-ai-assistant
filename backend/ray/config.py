@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # environment, never logged, and never written to the database.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
+    gemini_fallback_models: str = "gemini-flash-lite-latest"
     # Bounds on a single Gemini request. The registry fallback chain handles
     # retries across providers; long SDK retries against an overloaded endpoint
     # are what cause 60-90 second chat hangs.

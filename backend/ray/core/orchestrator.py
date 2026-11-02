@@ -162,16 +162,16 @@ class Orchestrator:
         try:
             if not routing.agents:
                 agent = ExecutiveAgent(self._providers, temperature=self._settings.llm_temperature)
-                yield record("agent", agent=agent.name, provider=self._providers.chain()[0])
                 async for event in self._stream_agent(agent, ctx):
                     yield event
+                yield record("agent", agent=agent.name, provider=self._providers.answering_provider)
                 content, speech_text = self._last_answer
                 agent_name = agent.name
             elif not routing.fan_out:
                 agent = _agent_instance(routing.agents[0], self._providers)
-                yield record("agent", agent=agent.name, provider=self._providers.chain()[0])
                 async for event in self._stream_agent(agent, ctx):
                     yield event
+                yield record("agent", agent=agent.name, provider=self._providers.answering_provider)
                 content, speech_text = self._last_answer
                 agent_name = agent.name
             else:
@@ -179,7 +179,6 @@ class Orchestrator:
                 outputs: list[dict[str, str]] = []
                 for name in routing.agents:
                     agent = _agent_instance(name, self._providers)
-                    yield record("agent", agent=agent.name, provider=self._providers.chain()[0])
                     text = await self._run_agent_silent(
                         agent,
                         AgentContext(
@@ -193,16 +192,22 @@ class Orchestrator:
                             project_id=ctx.project_id,
                         ),
                     )
+                    yield record(
+                        "agent", agent=agent.name, provider=self._providers.answering_provider
+                    )
                     outputs.append({"agent": agent.name, "content": text})
 
                 exec_agent = ExecutiveAgent(
                     self._providers, temperature=self._settings.llm_temperature
                 )
-                yield record(
-                    "agent", agent="executive", provider=self._providers.chain()[0], composing=True
-                )
                 async for event in self._stream_agent_generator(exec_agent.compose(ctx, outputs)):
                     yield event
+                yield record(
+                    "agent",
+                    agent="executive",
+                    provider=self._providers.answering_provider,
+                    composing=True,
+                )
                 content, speech_text = self._last_answer
                 agent_name = "executive"
 

@@ -313,6 +313,44 @@ Embeddings run locally. Install the model backend with `uv sync --group embeddin
 (~2 GB of torch); without it Ray falls back to a dependency-free hashing embedder that
 matches on shared words rather than meaning ([ADR-0016](docs/adr/0016-embedding-backend-fallback.md)).
 
+### Gemini quota and model fallback
+
+Gemini's free tier has small, model/project-specific limits. For example, a
+`gemini-3.6-flash` free-tier project may have only **20 requests/day**. Routing,
+tool selection and answer generation can each consume a request; chat turns are
+not necessarily one API call. Check AI Studio for your current limits.
+
+On HTTP 429, Ray reads Google's RetryInfo and “retry in” duration and distinguishes
+daily from per-minute quota exhaustion. The exhausted model is skipped until its
+cooldown expires, without sleeping or making repeated doomed requests. If Google
+omits a retry time, daily quota waits until the next midnight Pacific; other rate
+limits default to 60 seconds. Cooldowns are in memory and reset on backend restart.
+
+`RAY_GEMINI_FALLBACK_MODELS=gemini-flash-lite-latest` is an ordered, comma-separated
+list of cheaper Gemini models tried **only on quota exhaustion**, before leaving
+Gemini for `RAY_LLM_FALLBACK_PROVIDER`. Set it to an empty value to disable this
+extra attempt. Flash Lite is an alias like `gemini-flash-latest`; availability and
+higher quotas are not guaranteed for every project. Each model has its own
+cooldown, and the primary is tried again after its cooldown expires. Once streamed
+text has been emitted, Ray never switches models/providers mid-answer.
+
+Health diagnostics (`gemini_quota`) and HUD telemetry show the quota/reset reason.
+If no live provider can answer, the mock reply explicitly includes that reason;
+expanded traces attribute the answer to the provider that actually answered.
+
+**Subscription users:** prefer the authenticated official Claude CLI as primary,
+with Gemini as a fallback, rather than spending the free Gemini quota on every turn:
+
+```dotenv
+RAY_LLM_PROVIDER=claude_cli
+RAY_LLM_FALLBACK_PROVIDER=gemini,ollama
+RAY_GEMINI_FALLBACK_MODELS=gemini-flash-lite-latest
+```
+
+Install/sign in to `claude` separately (see subscription-provider setup). No API
+key is required for Claude CLI; the Gemini fallback still requires
+`RAY_GEMINI_API_KEY`.
+
 ### Google Calendar and Notion integrations
 
 Local calendar/ICS and Obsidian remain available without cloud credentials. Cloud

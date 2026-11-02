@@ -140,6 +140,10 @@ class LLMProvider(ABC):
         """Whether the adapter can carry tool definitions (Phase 4 uses this)."""
         return False
 
+    def cooldown_detail(self) -> str:
+        """Nonempty while every model is cooling down; the registry must skip it."""
+        return ""
+
     async def aclose(self) -> None:
         """Release any client resources. Overridden where there is a connection."""
         return None

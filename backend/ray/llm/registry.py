@@ -10,6 +10,7 @@ Two ideas live here:
 """
 
 from collections.abc import AsyncIterator, Callable, Iterator, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -68,6 +69,7 @@ def _build(name: ProviderName, settings: Settings) -> LLMProvider:
             model=settings.gemini_model,
             timeout_ms=settings.gemini_timeout_ms,
             retry_attempts=settings.gemini_retry_attempts,
+            fallback_models=settings.gemini_fallback_models,
         )
     if name == "ollama":
         from ray.llm.providers.ollama import OllamaProvider
@@ -88,6 +90,22 @@ class ProviderRegistry:
         self._instances: dict[str, LLMProvider] = {}
         self._unavailable: dict[str, str] = {}
         self.active_provider: str | None = None
+        self._answering_provider: ContextVar[str | None] = ContextVar(
+            "answering_provider", default=None
+        )
+
+    @property
+    def answering_provider(self) -> str | None:
+        """Last agent answer in this request/task, unlike the process-wide health field."""
+        return self._answering_provider.get()
+
+    def quota_notice(self) -> str:
+        provider = self._instances.get("gemini")
+        return provider.info().detail if provider is not None else ""
+
+    def _mock_notice(self, provider: LLMProvider) -> str:
+        quota = self.quota_notice() if provider.name == "mock" else ""
+        return f"[Canned response — {quota}. No live provider answered.]\n\n" if quota else ""
 
     # -- chain construction -------------------------------------------------
 
@@ -129,10 +147,20 @@ class ProviderRegistry:
         self._instances[name] = provider
         return provider
 
-    def _available(self, chain: Sequence[ProviderName]) -> Iterator[LLMProvider]:
+    def _available(
+        self,
+        chain: Sequence[ProviderName],
+        on_degrade: Callable[[Degradation], None] | None = None,
+    ) -> Iterator[LLMProvider]:
         for name in chain:
             try:
-                yield self.get(name)
+                provider = self.get(name)
+                cooldown = provider.cooldown_detail()
+                if cooldown:
+                    if on_degrade is not None:
+                        on_degrade(Degradation(failed_provider=name, reason=cooldown))
+                    continue
+                yield provider
             except LLMError as exc:
                 # Unconfigured is normal, not exceptional: no key means skip.
                 self._unavailable[name] = str(exc)
@@ -148,11 +176,13 @@ class ProviderRegistry:
         on_degrade: Callable[[Degradation], None] | None = None,
     ) -> Completion:
         last: LLMError | None = None
-        for provider in self._available(self.chain(role)):
+        for provider in self._available(self.chain(role), on_degrade):
             try:
                 completion = await provider.complete(request)
                 if role == "agent":
-                    self.active_provider = provider.name
+                    completion.text = self._mock_notice(provider) + completion.text
+                    self.active_provider = completion.provider
+                    self._answering_provider.set(completion.provider)
                 return completion
             except LLMError as exc:
                 last = self._handle(exc, provider, on_degrade)
@@ -174,13 +204,18 @@ class ProviderRegistry:
         the first chunk moves to the next provider.
         """
         last: LLMError | None = None
-        for provider in self._available(self.chain(role)):
+        for provider in self._available(self.chain(role), on_degrade):
             started = False
             try:
                 async for chunk in provider.stream(request):
+                    if role == "agent" and not started:
+                        notice = self._mock_notice(provider)
+                        if notice:
+                            yield Chunk(text=notice)
                     started = True
                     if role == "agent":
                         self.active_provider = provider.name
+                        self._answering_provider.set(provider.name)
                     yield chunk
                 return
             except LLMError as exc:

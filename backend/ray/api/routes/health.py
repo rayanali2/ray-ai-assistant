@@ -50,6 +50,9 @@ async def health(
         if caps.local_ready
         else "browser fallback",
     }
+    quota = get_registry().quota_notice()
+    if quota:
+        diagnostics["gemini_quota"] = quota
 
     first_user = await user_service.get_first_user(session)
     if first_user is not None:
@@ -70,7 +73,7 @@ async def health(
     if database != "connected":
         diagnostics["suggestion"] = "Check DATABASE_URL and that Postgres is running."
     elif llm_status in {"unconfigured", "mock"}:
-        diagnostics["suggestion"] = (
+        diagnostics["suggestion"] = quota or (
             "No model configured — add a Gemini key in desktop Preferences or run Ollama."
         )
 
