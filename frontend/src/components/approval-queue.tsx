@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { useDashboard } from "@/components/dashboard-context";
 import type { components } from "@/lib/api-types";
@@ -12,6 +13,7 @@ import type { components } from "@/lib/api-types";
  * decision, so the status bar and reactor stay in sync with the queue.
  */
 export function ApprovalQueue() {
+  const router = useRouter();
   const { approvals, refreshApprovals, pendingApprovals } = useDashboard();
   const [acting, setActing] = useState<Set<string>>(new Set());
 
@@ -28,6 +30,8 @@ export function ApprovalQueue() {
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: "Failed" }));
         alert(String(error.detail ?? "Failed"));
+      } else {
+        router.refresh();
       }
       await refreshApprovals();
     } finally {

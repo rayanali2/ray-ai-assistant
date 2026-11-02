@@ -364,16 +364,17 @@ else, so a memory query can filter by category and project *and* rank by similar
 one statement.
 
 **Embeddings are generated locally** with `sentence-transformers`
-(`all-MiniLM-L6-v2`, 384 dimensions) (ADR-0003). The memory corpus — the most sensitive
-data Ray holds — never leaves the machine, there is no quota on the hot path, and there
-is no cost.
+(`all-MiniLM-L6-v2`, 384 dimensions) (ADR-0003). Storage and embedding computation
+are local and consume no hosted embedding quota. Retrieved memories can still
+leave the machine as context sent to the selected hosted/CLI chat provider.
 
 Retrieval is hybrid, not pure similarity: similarity, importance, recency, and past
 usage are combined, with a boost for memories scoped to the active project. See
 ADR-0013.
 
 **Two embedding backends exist** (ADR-0016). `sentence-transformers` is the default and
-is what Ray uses in practice; `hashing` needs no torch install and no download, is what
+is the Settings default; automatic bootstrap and local/subscription presets select
+`hashing`, which needs no torch install and no download, is what
 CI runs, and is what a machine missing the optional install silently degrades to. The
 backends occupy *different vector spaces*: switching `RAY_EMBEDDING_BACKEND` invalidates
 existing embeddings and requires re-embedding. `GET /memory/stats` reports how many live

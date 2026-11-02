@@ -4,13 +4,15 @@ Ray is a personal, Jarvis-inspired AI assistant: a single conversational surface
 by persistent memory, specialized agents, and tools that reach into the systems its user
 already lives in — calendar, GitHub, notes, and local files.
 
-Ray is built for one person, runs locally, and costs nothing to operate.
+Ray is built for one person and runs locally. Ollama can run without a hosted-model
+bill; cloud free tiers and subscription CLIs have their own limits and costs.
 
-> **Status: Phase 9–10 complete.** Phases 1–8 (foundation, conversation, memory,
-> agents, productivity/integrations, voice hardening, advanced dashboard, self-improvement)
-> are merged. Ray now has specialist agents for fitness, content, and finance; an
-> orchestrator that routes to them; a single-command install/run script; and a macOS
-> `.app` bundle builder. See the [roadmap](docs/10%20Development%20Roadmap.md) and
+> **Status:** unsigned Electron Mac app (release **v0.2.1**), local bootstrap,
+> subscription CLI providers, Google Calendar/Notion, and Gemini quota-aware fallback
+> are on `main`. The app manages a separate checkout; it does not bundle Docker or
+> the backend runtime. Browser wake word and optional local push-to-talk are available;
+> continuous local wake-word capture in the HUD remains future work.
+> See the [roadmap](docs/10%20Development%20Roadmap.md) and
 > [`/docs/adr`](docs/adr/) for details.
 
 ---
@@ -70,14 +72,14 @@ CI:
 |---|---|---|
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic | Best AI ecosystem; async suits streaming and tool calls ([ADR-0012](docs/adr/0012-backend-stack.md)) |
 | Database | PostgreSQL 16 + pgvector | One store for relational data *and* semantic memory ([ADR-0002](docs/adr/0002-postgres-pgvector.md)) |
-| LLM | Provider abstraction: Gemini (default), Groq, Ollama | Never locked to one provider; degrades instead of breaking ([ADR-0001](docs/adr/0001-llm-provider-abstraction.md)) |
+| LLM | Gemini, Ollama, official Claude/Codex CLIs, mock | Ordered fallback; Groq is not implemented ([ADR-0001](docs/adr/0001-llm-provider-abstraction.md), [ADR-0019](docs/adr/0019-subscription-cli-providers.md)) |
 | Embeddings | Local `sentence-transformers` (`all-MiniLM-L6-v2`), with a dependency-free hashing backend | Free, fast, and the memory corpus never leaves the machine ([ADR-0003](docs/adr/0003-local-embeddings.md), [ADR-0016](docs/adr/0016-embedding-backend-fallback.md)) |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind v4, shadcn/ui | Bespoke HUD without fighting a theme ([ADR-0011](docs/adr/0011-frontend-stack.md)) |
 | Streaming | Server-Sent Events | One-directional flow; plain HTTP, reuses existing auth ([ADR-0007](docs/adr/0007-sse-streaming.md)) |
 | Voice | openWakeWord, faster-whisper, Piper — all local | Voice-first from Phase 1, free, private ([ADR-0009](docs/adr/0009-voice-first-architecture.md)) |
 
-Everything is free and open-source. The only external dependency is an LLM free tier,
-and setting `RAY_LLM_PROVIDER=ollama` removes even that.
+Hosted models and browser speech may send data to external services. For local-only
+generation use Ollama with no hosted fallbacks and configure local voice if needed.
 
 ---
 
@@ -90,7 +92,7 @@ the official CLIs and sign in on the machine running Ray:
 npm install -g @anthropic-ai/claude-code @openai/codex
 claude                 # complete Claude Code sign-in interactively
 codex login            # sign in with ChatGPT, not an API key
-./scripts/ray init --preset subscriptions  # add --force to replace an existing preset
+./scripts/ray init --preset subscriptions  # fresh .env; see warning below for existing installs
 ./scripts/ray install
 ./scripts/ray start
 ```
@@ -99,7 +101,12 @@ Subscriptions do not include API keys. CLI access depends on your plan, vendor
 terms and usage limits; Ray does not bypass those limits. No login is performed by
 Ray. `./scripts/ray doctor` reports optional CLI installation/login status.
 
-The preset uses Gemini when a Gemini key is already present, otherwise Claude Code,
+`init` refuses an existing configured `.env` unless `--force` is passed. **Back it up
+privately first:** `--force` replaces configuration (including the API token), preserving
+only the Gemini key. Restart services afterward. For a desktop-managed checkout,
+editing provider settings in the existing `.env` is safer than replacing it.
+
+The subscriptions preset uses Gemini when a Gemini key is already present, otherwise Claude Code,
 then tries `claude_cli,codex_cli,ollama` with mock always last. Override
 `RAY_LLM_PROVIDER` / `RAY_LLM_ROUTER_PROVIDER` to select either CLI directly.
 Optional settings: `RAY_CLAUDE_CLI_MODEL`, `RAY_CODEX_CLI_MODEL`,
@@ -114,24 +121,30 @@ first output fall through to the next provider; later failures end the stream.
 
 ## Quickstart
 
-Prerequisites: Docker, Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22 with
-pnpm.
+**Mac users:** [download the v0.2.1 DMG](https://github.com/rayanali2/ray-ai-assistant/releases/tag/v0.2.1)
+→ install/open **Docker Desktop** and finish its setup → drag Ray to Applications
+→ open Ray → **Install Ray**. No Homebrew is required. Read the unsigned-app and
+model-setup notes below; without a key, signed-in CLI or local model, replies are mock.
+
+### Terminal quickstart (macOS / Linux)
+
+The bootstrap installs user-local uv/Python 3.12 and pnpm/Node 22 as needed. Install
+Git and Docker first (Linux also needs curl); macOS can prompt for Apple's Command
+Line Tools. Docker must be running. From an existing checkout:
 
 ```bash
 git clone https://github.com/rayanali2/ray-ai-assistant.git
 cd ray-ai-assistant
 
-./scripts/ray init --preset local   # creates .env (or gemini/fast if you have a key)
-# Optionally edit .env to set RAY_GEMINI_API_KEY or RAY_USER_NAME.
-
-./scripts/ray install               # dependencies, Postgres, migrations, seed data
-./scripts/ray start                 # opens http://localhost:3000
+./scripts/install.sh                # auto-selects a provider only when creating .env
 ```
 
-Or run everything at once:
+If prerequisites are already installed, the equivalent manual flow is:
 
 ```bash
-./scripts/install.sh
+./scripts/ray init --preset auto    # gemini key → authenticated CLI → local
+./scripts/ray install
+./scripts/ray start                 # opens http://localhost:3000
 ```
 
 One-line installer (macOS / Linux):
@@ -149,6 +162,8 @@ Run `./scripts/ray doctor` to verify your local setup.
 Download the matching **arm64** (Apple Silicon) or **x64** (Intel) `.dmg` from
 GitHub **Releases**, or the **Ray-macOS** artifact in the **Desktop** Actions workflow.
 Open the disk image and drag **Ray.app** to **Applications**.
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and finish
+its first-run setup before clicking **Install Ray**. Docker is not bundled.
 
 The app is currently unsigned: right-click → **Open** on first launch. If macOS
 still quarantines the downloaded app, after verifying its source run:
@@ -182,6 +197,12 @@ Ray explicitly warns that responses are canned; add a key later through
 The HUD shows the last answering provider and warns when mock fallback is used.
 No cloud account, subscription login or Ollama model is created automatically.
 
+To use an existing subscription, install/sign in to the official `claude` or
+`codex` CLI and use `./scripts/ray init --preset subscriptions` **before** creating
+`.env`, or follow the existing-install warning in the subscription section above.
+For Claude-first with Gemini fallback, edit the existing `.env` as shown under
+[Gemini quota](#gemini-quota-and-model-fallback), then restart services from the tray.
+
 The tray and normal application menu offer Show, Start/Stop/Restart, logs, doctor
 and Preferences (change checkout or Gemini key). **Cmd+Shift+Space** focuses Ray and invokes the
 same action as the microphone button; local voice must be configured if Electron
@@ -204,6 +225,35 @@ pnpm dist:mac  # unsigned DMG + ZIP, arm64 and x64, in desktop/dist/
 Linux verification: `cd desktop && pnpm install && pnpm dist:linux`, then run the
 AppImage (or `pnpm dev`). Linux uses Ctrl+Shift+Space and stores desktop config/logs
 under `~/.config/Ray`. No auto-update, signing or notarization is configured yet.
+Tagged builds derive their app/artifact version from `v*` tags (v0.2.1 yields
+`Ray-0.2.1-arm64.dmg` / `Ray-0.2.1-x64.dmg`). Local untagged builds currently use
+`desktop/package.json`'s 0.2.0; a DMG version is not the backend API version.
+
+### Command reference and troubleshooting
+
+Run these from the checkout containing `scripts/ray`:
+
+| Command | Behavior |
+|---|---|
+| `./scripts/ray init --preset auto` | Create `.env`; presets: `auto`, `local` (CLI default), `gemini`, `fast`, `subscriptions`; optional `--name`, destructive `--force` |
+| `./scripts/ray install [--voice]` | Dependencies, PostgreSQL, migrations and seed; `--voice` adds voice dependencies/models, not ffmpeg |
+| `./scripts/ray start [--no-browser]` | Start backend and frontend (Next.js dev server); normal start opens the browser |
+| `./scripts/ray stop [--postgres]` | Stop services; optionally stop PostgreSQL too |
+| `./scripts/ray status` | Check local ports and backend health |
+| `./scripts/ray logs --lines 80` | Print the last service-log lines (not a live follow) |
+| `./scripts/ray doctor` | Prerequisite, service, CLI-login, ffmpeg and integration configuration checks |
+| `./scripts/ray configure-key` | Save a supplied `RAY_GEMINI_API_KEY` environment value privately; selects Gemini; restart afterward |
+| `./scripts/ray connect google` | Start Google consent; requires configured client and local backend on port 8000 |
+
+* Unsigned app blocked: verify the download, then use right-click → Open or the
+  `xattr` command above. Signing/notarization are not implemented.
+* Install/start fails: complete Docker/Command Line Tools setup, then Retry; use
+  tray **Run doctor** / **Open logs folder**. Do not paste keys into logs or tickets.
+* Canned replies: check MODEL in telemetry. A configured key can still be quota
+  exhausted (for example Gemini's 20/day tier); see the reset notice, configure a
+  subscription/local fallback, or wait. A healthy backend does not prove a live LLM.
+* Local voice cannot decode a browser recording: install ffmpeg on the service PATH,
+  install optional voice models/dependencies, then restart. See local voice below.
 
 ### Lightweight macOS launcher alternative
 
@@ -226,7 +276,7 @@ the app will fail to start because dependencies and the database are not initial
 
 ### Choosing a model
 
-Ray runs with **no** model configured — it answers from a labelled `mock` provider that
+Ray can run with **no** model configured — it answers from a labelled `mock` provider that
 tells you what to set (ADR-0015). To get real answers, pick either end of the chain:
 
 ```bash
@@ -288,9 +338,12 @@ RAY_WAKE_WORD_ENABLED=true
 
 `download_voice_models.py` fetches a small Piper voice model and pre-loads the Whisper
 `tiny` model so first use is fast. Server-side wake word works without `openwakeword`:
-Ray runs a tiny faster-whisper keyword spotter on the microphone stream, so "Ray" or
-"Jarvis" activates even when no dedicated `.tflite` wake model is installed. A real
-openWakeWord model can be configured with `RAY_WAKE_WORD_MODEL` when it is available.
+the backend has a faster-whisper keyword spotter when no dedicated `.tflite` model
+is installed. However, the HUD's local MediaRecorder path is currently push-to-talk;
+it does not continuously upload local wake-word audio. Browser wake mode uses Web
+Speech recognition and may send audio to the browser vendor before activation.
+`RAY_WAKE_WORD_MODEL` can select a real openWakeWord model for clients that stream
+continuous audio to the local backend.
 
 Under each answer, the collapsed trace line shows what actually happened: which agent
 answered, which provider was used, how many memories were retrieved, and whether a
@@ -429,15 +482,15 @@ curl -N -H "Authorization: Bearer $RAY_API_TOKEN" -H 'Content-Type: application/
 ### Development
 
 ```bash
-# Backend: lint, types, architecture boundaries, tests
-cd backend
-uv run ruff check . && uv run mypy ray scripts && uv run lint-imports && uv run pytest
+# From repo root; tests MUST use the separate ray_test database, not personal data.
+(cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy ray scripts && uv run lint-imports)
+(cd backend && RAY_DATABASE_URL=postgresql+asyncpg://ray:ray@localhost:5433/ray_test uv run pytest -q)
 
 # Behavioural evaluation: does memory actually change Ray's answers? (docs/15)
-uv run pytest tests/eval
+(cd backend && RAY_DATABASE_URL=postgresql+asyncpg://ray:ray@localhost:5433/ray_test uv run pytest tests/eval)
 
 # Frontend: regenerate the API types after changing a response shape
-cd frontend && pnpm generate:api && pnpm lint && pnpm typecheck && pnpm test
+(cd frontend && pnpm generate:api && pnpm lint && pnpm typecheck && pnpm test)
 
 # Optional: run the same checks on every commit
 pre-commit install
@@ -451,10 +504,15 @@ quietly.
 
 ## Privacy
 
-* Memory, embeddings, and pre-activation microphone audio **never leave the machine**.
-* Conversation text **is** sent to the configured LLM provider. The default is Google's
-  Gemini free tier; `RAY_LLM_PROVIDER=ollama` keeps everything local.
-* The API always requires a bearer token and binds to `127.0.0.1` by default.
+* Memory storage and embeddings are local. Retrieved memories and tool results can
+  enter prompts sent to the selected hosted/CLI provider, along with conversation text.
+* For local-only generation use `RAY_LLM_PROVIDER=ollama` with
+  `RAY_LLM_FALLBACK_PROVIDER=mock`; browser speech and cloud integrations are separate
+  network paths. Browser speech may send audio before wake activation; local STT/TTS
+  stays on the machine.
+* The API binds to `127.0.0.1` by default. `/health` is public; Google OAuth callback
+  is bearer-exempt but protected by expiring state and PKCE. Other application routes
+  require a bearer token (FastAPI also exposes its generated API docs).
 * No secret is ever stored in the database — only a reference to where it lives.
 
 Details in [`docs/12 Security and Privacy`](docs/12%20Security%20and%20Privacy.md).

@@ -61,14 +61,17 @@ Ray must protect access to:
 * API keys
 
 **V1 (ADR-0006):** a single seeded local user and a static bearer token on every request
-outside `/health`. The backend binds to `127.0.0.1`. There is deliberately no
+outside `/health` and `/integrations/google/callback`. The latter uses expiring,
+single-use OAuth state and PKCE rather than a bearer token (ADR-0021). FastAPI's
+generated `/docs`, `/redoc` and `/openapi.json` are also public.
+The backend binds to `127.0.0.1`. There is deliberately no
 registration or login system — hand-rolling one for a single local user would add risk
 without adding protection. Identity resolution lives in one dependency function so real
 authentication can replace it later without touching any other code.
 
 Requirements that still apply in full:
 
-* the API is never unauthenticated, even locally
+* application data/action endpoints require authentication, even locally
 * credentials are never hardcoded and never logged
 * the token lives in a git-ignored `.env` and is never exposed to browser JavaScript
 
@@ -85,7 +88,10 @@ Use:
 
 The `integrations` table stores only a **reference** to where a secret lives (an
 environment variable name or a keyring key) — never a secret value. Logs pass through a
-redaction processor so a stack trace can never print a key.
+redaction processor; do not rely on redaction to make arbitrary debug output safe.
+Google OAuth tokens are stored outside the database in
+`~/.local/share/ray/google-calendar.json` (or `RAY_DATA_DIR`), atomically with mode
+0600. Bootstrap/Preferences persist Gemini keys in the checkout's private `.env`.
 
 Example:
 
@@ -173,28 +179,32 @@ Ray should:
 
 Ray must be honest about this.
 
-* **Memory embeddings and the memory corpus never leave the machine** — embeddings are
-  computed locally (ADR-0003).
+* **Memory storage and embedding computation are local.** Retrieved memory text and
+  tool results may be included in prompts sent to a hosted model or subscription CLI.
 * **Conversation text does leave the machine** when a hosted LLM provider is selected
   (the default is Google's Gemini free tier, ADR-0001). This must be stated in the
   README and in the Settings UI.
-* Setting `RAY_LLM_PROVIDER=ollama` makes Ray fully local, at some cost in answer
-  quality. This option must always remain available.
-* **Microphone audio never leaves the machine before wake-word activation**, and
-  wake-word detection runs client-side (ADR-0009). While listening is armed, a
-  persistent indicator is shown and can be disabled in one click.
+* For local-only model generation set `RAY_LLM_PROVIDER=ollama` and
+  `RAY_LLM_FALLBACK_PROVIDER=mock`. Browser speech and cloud integrations are
+  independent network paths; changing the LLM does not disable them.
+* Browser wake-word detection operates on speech recognition transcripts: the
+  browser vendor may receive audio **before** activation. Local STT/TTS uses the
+  local backend; the HUD currently supports local push-to-talk, not continuous
+  local wake-word capture. Armed listening has a visible, revocable indicator.
 * **The browser speech backends are a hosted service in disguise.** `RAY_STT_BACKEND=browser`
   uses the Web Speech API, and in Chrome that streams the captured audio to Google for
   transcription — the audio leaves the machine even though the code runs in the browser.
   Speech *synthesis* is local in current browsers, but is not guaranteed to be. This is
-  acceptable as the Phase 2 default because it needs no setup, and it is why
-  `RAY_STT_BACKEND=local` (faster-whisper) remains on the roadmap. The UI must say which
+  the zero-setup fallback; optional `RAY_STT_BACKEND=local` (faster-whisper) and Piper
+  are implemented. Compressed browser audio requires ffmpeg on the backend PATH.
+  The UI must say which
   backend is active rather than only showing a microphone icon.
 * **The API token stays server-side.** The browser talks to a Next.js route handler,
   which adds the bearer token; `RAY_API_TOKEN` is never sent to the client or exposed in
   a client bundle. Only variables intentionally prefixed for client use may be read from
   browser code.
-* **A provider key is never logged, persisted, or returned by the API.**
+* **A provider key must never be logged or returned by the API.** It may be persisted
+  in the private gitignored `.env`, not in database integration records.
   `GET /chat/providers` reports whether a provider is configured and why not — never the
   credential. `.env` is gitignored, and the key is read through settings only
   (ADR-0015).

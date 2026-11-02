@@ -5,6 +5,11 @@
 Accepted. Supersedes the "wake word is a future enhancement" framing in `docs/02` and
 `docs/09`.
 
+Implementation clarification (see ADR-0018): the browser wake filter operates on
+Web Speech transcripts, so vendor audio upload can happen before activation. The
+HUD's implemented local recording path is push-to-talk, not continuous local wake
+capture. The pipeline below records the original design, not a privacy guarantee.
+
 ## Context
 
 Wake-word activation is a core identity feature of Ray, not an optional extra: the
