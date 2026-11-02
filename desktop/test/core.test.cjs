@@ -34,6 +34,7 @@ test("PATH includes login shell, GUI tool locations and inherited tools", () => 
   for (const item of ["/custom/node/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Users/ray/.local/bin", "/Users/ray/.cargo/bin", "/Applications/Docker.app/Contents/Resources/bin", "/other"]) assert.ok(value.includes(item));
   assert.equal(value.filter((item) => item === "/usr/bin").length, 1);
   assert.ok(value.includes("/Users/ray/.local/share/pnpm"));
+  assert.ok(value.indexOf("/Users/ray/.local/share/pnpm") < value.indexOf("/usr/local/bin"));
 });
 
 test("optional key is passed only as an environment value and rejects dotenv injection", () => {

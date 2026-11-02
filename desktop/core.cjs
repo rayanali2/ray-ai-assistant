@@ -26,10 +26,11 @@ function findCheckout(home, config, env = process.env) {
 
 function buildPath(loginPath, home, inherited = "") {
   return [...new Set([
-    "/opt/homebrew/bin", "/usr/local/bin", path.join(home, ".local/bin"),
-    path.join(home, ".cargo/bin"), "/Applications/Docker.app/Contents/Resources/bin",
+    path.join(home, ".local/bin"),
     path.join(home, ".local/share/pnpm"),
     path.join(home, ".local/share/pnpm/bin"),
+    "/opt/homebrew/bin", "/usr/local/bin",
+    path.join(home, ".cargo/bin"), "/Applications/Docker.app/Contents/Resources/bin",
     ...(loginPath || "").split(path.delimiter), ...inherited.split(path.delimiter), "/usr/bin", "/bin", "/usr/sbin", "/sbin",
   ].filter(Boolean))].join(path.delimiter);
 }
