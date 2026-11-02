@@ -19,7 +19,7 @@ from ray.core.contracts import RayRequest
 from ray.core.orchestrator import Orchestrator
 from ray.domain.enums import Modality
 from ray.services import user_service
-from ray.voice.base import SpeechRequest
+from ray.voice.base import SpeechRequest, VoiceError
 from ray.voice.providers.local import LocalSpeechToText, LocalTextToSpeech, LocalWakeWord
 
 log = structlog.get_logger()
@@ -186,7 +186,13 @@ class VoiceSession:
         self.state = "thinking"
         await self._send_state(websocket)
 
-        transcript = await self.manager.stt.transcribe(bytes(self.audio_buffer))
+        try:
+            transcript = await self.manager.stt.transcribe(bytes(self.audio_buffer))
+        except VoiceError as exc:
+            await self._send_error(websocket, str(exc))
+            self.state = "armed" if self.manager.settings.wake_word_enabled else "idle"
+            await self._send_state(websocket)
+            return
         await self._send(
             websocket,
             "transcript",

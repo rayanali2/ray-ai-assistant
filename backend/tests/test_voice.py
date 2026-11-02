@@ -16,7 +16,7 @@ from fastapi import WebSocket
 
 from ray.config import get_settings
 from ray.core.events import DoneEvent
-from ray.voice.base import AudioChunk, SpeechRequest, Transcript, WakeEvent
+from ray.voice.base import AudioChunk, SpeechRequest, Transcript, VoiceError, WakeEvent
 from ray.voice.manager import VoiceManager, VoiceSession
 from ray.voice.providers.local import LocalSpeechToText, LocalTextToSpeech, LocalWakeWord
 from tests.conftest import TEST_TOKEN
@@ -123,6 +123,23 @@ async def test_voice_session_barge_in(
 
     assert session.current_task is None or session.current_task.cancelled()
     assert session.state == "listening"
+
+
+@pytest.mark.parametrize("armed", [False, True])
+async def test_stt_decode_error_reaches_client_and_resets_state(
+    fake_manager, mock_websocket, armed
+):
+    fake_manager.settings.wake_word_enabled = armed
+    fake_manager.stt.transcribe = AsyncMock(
+        side_effect=VoiceError("ffmpeg is required to decode browser audio")
+    )
+    session = VoiceSession(fake_manager, __import__("uuid").uuid4())
+    session.audio_buffer.extend(b"OggSencoded")
+    await session._handle_text(mock_websocket, json.dumps({"type": "stop"}))
+    messages = _messages_from(mock_websocket)
+    assert {"type": "error", "message": "ffmpeg is required to decode browser audio"} in messages
+    assert session.state == ("armed" if armed else "idle")
+    assert session.current_task is None
 
 
 async def test_voice_session_wake_word_arms_listening(

@@ -6,13 +6,16 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from ray.config import Settings
 from ray.llm.base import (
     CompletionRequest,
     LLMMessage,
+    ProviderRequestError,
     ProviderUnavailableError,
     RateLimitedError,
 )
 from ray.llm.providers.ollama import OllamaProvider
+from ray.llm.registry import ProviderRegistry
 
 REQUEST = CompletionRequest(messages=[LLMMessage(role="user", content="hi")], system="You are Ray.")
 
@@ -82,6 +85,80 @@ def test_ollama_describes_itself_without_being_called() -> None:
     info = OllamaProvider(host="http://ollama.test", model="llama3.2").info()
     assert info.name == "ollama"
     assert info.model == "llama3.2"
+
+
+class OllamaStream(httpx.AsyncByteStream):
+    def __init__(self, data: bytes, *, fail: bool = False):
+        self.data = data
+        self.fail = fail
+
+    async def __aiter__(self):
+        if self.data:
+            yield self.data
+        if self.fail:
+            raise httpx.ReadError("stream disconnected")
+
+
+@pytest.mark.parametrize("status", [404, 429, 500, 503, 400, 401])
+async def test_ollama_stream_http_status_matches_complete(status):
+    def handler(request):
+        return httpx.Response(status, stream=OllamaStream(b'{"error":"model unavailable"}'))
+
+    provider = _provider(handler)
+    error_type = (
+        ProviderUnavailableError if status in (404, 429) or status >= 500 else ProviderRequestError
+    )
+    try:
+        for operation in ("complete", "stream"):
+            with pytest.raises(error_type, match="model unavailable"):
+                if operation == "complete":
+                    await provider.complete(REQUEST)
+                else:
+                    _ = [chunk async for chunk in provider.stream(REQUEST)]
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.parametrize("failure", [404, 429, 500, 503, "connection", "read"])
+async def test_ollama_stream_falls_back_before_first_chunk(failure):
+    def handler(request):
+        if failure == "connection":
+            raise httpx.ConnectError("connection refused", request=request)
+        if failure == "read":
+            return httpx.Response(200, stream=OllamaStream(b"", fail=True))
+        return httpx.Response(failure, stream=OllamaStream(b'{"error":"unavailable"}'))
+
+    registry = ProviderRegistry(Settings(llm_provider="ollama", llm_fallback_provider="mock"))
+    registry.register("ollama", _provider(handler))
+    degradations = []
+    try:
+        chunks = [chunk async for chunk in registry.stream(REQUEST, on_degrade=degradations.append)]
+        assert "mock provider" in "".join(chunk.text for chunk in chunks)
+        assert registry.active_provider == "mock"
+        assert [event.failed_provider for event in degradations] == ["ollama"]
+    finally:
+        await registry.aclose()
+
+
+async def test_ollama_stream_failure_after_text_does_not_fall_back():
+    def handler(request):
+        return httpx.Response(
+            200, stream=OllamaStream(b'{"message":{"content":"visible"}}\n', fail=True)
+        )
+
+    registry = ProviderRegistry(Settings(llm_provider="ollama", llm_fallback_provider="mock"))
+    registry.register("ollama", _provider(handler))
+    seen = []
+    degradations = []
+    try:
+        with pytest.raises(ProviderUnavailableError, match="stream disconnected"):
+            async for chunk in registry.stream(REQUEST, on_degrade=degradations.append):
+                seen.append(chunk.text)
+        assert seen == ["visible"]
+        assert registry.active_provider == "ollama"
+        assert degradations == []
+    finally:
+        await registry.aclose()
 
 
 class TestGeminiMapping:

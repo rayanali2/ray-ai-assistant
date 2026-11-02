@@ -261,6 +261,15 @@ input, not a requirement.
 
 #### Running voice locally (no cloud STT/TTS)
 
+Local browser recordings (WebM/Ogg/MP4) also require **ffmpeg** on the service PATH.
+On macOS, use a macOS binary linked from [ffmpeg.org](https://ffmpeg.org/download.html)
+and place the `ffmpeg` executable in `~/.local/bin` (no Homebrew required), or use
+`brew install ffmpeg` if you already use Homebrew. On Debian/Ubuntu, install it with
+`sudo apt install ffmpeg`. Restart Ray afterward; `./scripts/ray doctor` reports
+whether it is found. The bootstrap installer does not download third-party ffmpeg
+binaries automatically. Missing ffmpeg produces a clear voice error, not a bogus
+transcription. Raw PCM and WAV input do not require ffmpeg.
+
 Install the optional voice dependencies and download the models once:
 
 ```bash
