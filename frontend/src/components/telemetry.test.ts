@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Telemetry } from "./telemetry";
 
 vi.stubGlobal("React", React);
-let health: { status: string; database: string; llm_provider: string } | null = null;
+let health: { status: string; database: string; llm_provider: string; diagnostics?: Record<string, string> } | null = null;
 vi.mock("@/components/dashboard-context", () => ({ useDashboard: () => ({ health }) }));
 
 describe("provider telemetry", () => {
@@ -23,5 +23,19 @@ describe("provider telemetry", () => {
     const html = renderToStaticMarkup(React.createElement(Telemetry));
     expect(html).toContain("UNAVAILABLE");
     expect(html).toContain("OFFLINE");
+  });
+  it("shows quota exhaustion instead of suggesting an already configured key", () => {
+    health = { status: "ok", database: "connected", llm_provider: "mock", diagnostics: { gemini_quota: "Gemini daily quota used up — resets in 11h" } };
+    const html = renderToStaticMarkup(React.createElement(Telemetry));
+    expect(html).toContain("daily quota used up");
+    expect(html).toContain("resets in 11h");
+    expect(html).toContain("CANNED REPLIES");
+    expect(html).not.toContain("add a Gemini key");
+  });
+  it("shows a primary-model cooldown even if a live fallback answered", () => {
+    health = { status: "ok", database: "connected", llm_provider: "gemini", diagnostics: { gemini_quota: "Gemini per-minute quota used up — resets in 20s" } };
+    const html = renderToStaticMarkup(React.createElement(Telemetry));
+    expect(html).toContain("per-minute quota");
+    expect(html).not.toContain("CANNED REPLIES");
   });
 });

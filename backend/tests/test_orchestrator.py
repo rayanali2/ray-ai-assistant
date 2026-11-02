@@ -51,6 +51,22 @@ async def test_events_arrive_in_pipeline_order(session: AsyncSession, user_id: u
     assert isinstance(events[-1], DoneEvent)
 
 
+async def test_fallback_trace_attributes_the_answer_not_the_preferred_provider(session, user_id):
+    registry = ProviderRegistry(Settings(llm_provider="gemini", llm_fallback_provider="mock"))
+    registry.register(
+        "gemini",
+        FakeProvider(name="gemini", fail_with=RateLimitedError("quota", provider="gemini")),
+    )
+    registry.register("mock", FakeProvider(name="mock", chunks=["canned"]))
+    events = await _collect(Orchestrator(providers=registry), session, _request(user_id))
+    agents = [e for e in events if isinstance(e, TraceStreamEvent) and e.stage == "agent"]
+    assert agents and all(e.detail["provider"] == "mock" for e in agents)
+    done = events[-1]
+    assert isinstance(done, DoneEvent)
+    saved = await session.get(Message, done.message_id)
+    assert all(e["provider"] == "mock" for e in saved.trace["events"] if e["stage"] == "agent")
+
+
 async def test_user_message_is_persisted_before_the_model_is_called(
     session: AsyncSession, user_id: uuid.UUID
 ) -> None:
