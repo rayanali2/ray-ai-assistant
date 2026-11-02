@@ -1,7 +1,7 @@
 {
   "name": "ray-desktop",
   "productName": "Ray",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Ray personal assistant desktop shell",
   "author": "Ray contributors",
