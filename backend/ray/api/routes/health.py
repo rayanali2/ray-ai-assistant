@@ -1,4 +1,4 @@
-"""Health check — the only unauthenticated route (ADR-0006).
+"""Public health check (ADR-0006); OAuth callback uses state authentication.
 
 The response includes a compact diagnostics map so the dashboard and CLI can show
 self-diagnosis without needing an authenticated /system/diagnostics call.
@@ -55,7 +55,15 @@ async def health(
     if first_user is not None:
         integrations = await integration_service.list_integrations(session, first_user.id)
         failed = [i for i in integrations if i.status.value == "error"]
-        diagnostics["integrations"] = f"{len(integrations)} configured" + (
+        connections = integration_service.connection_statuses(integrations)
+        implicit = sum(
+            1
+            for provider, state in connections.items()
+            if not state.startswith("not ")
+            and not any(i.provider == provider for i in integrations)
+        )
+        diagnostics.update(connections)
+        diagnostics["integrations"] = f"{len(integrations) + implicit} configured" + (
             f", {len(failed)} error" if failed else ""
         )
 

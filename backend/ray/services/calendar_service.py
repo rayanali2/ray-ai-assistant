@@ -1,12 +1,17 @@
 import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ray.config import get_settings
 from ray.db.models import CalendarEvent
-from ray.domain.enums import EventSource
+from ray.domain.enums import EventSource, IntegrationType
+from ray.integrations.calendar import GoogleCalendarAdapter
+from ray.integrations.google_auth import get_google_oauth
 from ray.schemas import CalendarEventCreate, CalendarEventRead, CalendarEventUpdate
+from ray.services import integration_service
 from ray.services.errors import InvalidEventError
 
 
@@ -28,6 +33,57 @@ async def list_events(
     stmt = stmt.order_by(CalendarEvent.start_time.asc()).limit(limit)
     result = await session.execute(stmt)
     return [CalendarEventRead.model_validate(e) for e in result.scalars()]
+
+
+async def dashboard_events(
+    session: AsyncSession, user_id: uuid.UUID, start: datetime, end: datetime
+) -> list[CalendarEventRead]:
+    events = await list_events(session, user_id, start=start, end=end)
+    if get_google_oauth().status() != "connected":
+        return events
+    adapter = await integration_service.resolve_adapter(
+        session,
+        user_id,
+        IntegrationType.CALENDAR,
+        "google",
+        fallback=integration_service.IntegrationAdapterConfig(
+            type=IntegrationType.CALENDAR, provider="google"
+        ),
+    )
+    if not isinstance(adapter, GoogleCalendarAdapter):
+        return events
+    result = await adapter.list_events(start.isoformat(), end.isoformat())
+    if result.ok:
+        for item in result.data["events"]:
+            if item.get("status") == "cancelled":
+                continue
+            try:
+
+                def event_time(value: dict[str, str]) -> datetime:
+                    if "dateTime" in value:
+                        return datetime.fromisoformat(value["dateTime"])
+                    return datetime.fromisoformat(value["date"]).replace(
+                        tzinfo=ZoneInfo(value.get("timeZone", get_settings().user_timezone))
+                    )
+
+                events.append(
+                    CalendarEventRead(
+                        id=uuid.uuid5(
+                            uuid.NAMESPACE_URL, f"google:{adapter.calendar_id}:{item['id']}"
+                        ),
+                        title=item.get("summary", "(Untitled)"),
+                        description=item.get("description", ""),
+                        start_time=event_time(item["start"]),
+                        end_time=event_time(item["end"]),
+                        location=item.get("location"),
+                        source=EventSource.GOOGLE,
+                        external_id=item["id"],
+                        task_id=None,
+                    )
+                )
+            except (KeyError, ValueError):
+                continue
+    return sorted(events, key=lambda event: event.start_time)
 
 
 async def get_event(

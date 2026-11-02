@@ -10,6 +10,8 @@ import {
   deleteIntegration,
   INTEGRATION_TYPES,
   listIntegrations,
+  getConnections,
+  getGoogleAuthUrl,
   providersForType,
   updateIntegration,
   type Integration,
@@ -37,6 +39,7 @@ const TYPE_LABELS: Record<IntegrationType, string> = {
 
 export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [connections, setConnections] = useState<Record<string, string>>({});
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [permissions, setPermissions] = useState<ToolPermission[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -65,6 +68,7 @@ export default function SettingsPage() {
         getDiagnostics().catch(() => null),
       ]);
       setIntegrations(integrationsData);
+      setConnections(await getConnections());
       setTools(toolsData);
       setPermissions(permissionsData);
       setDiagnostics(diagnosticsData);
@@ -281,6 +285,22 @@ export default function SettingsPage() {
       </Panel>
 
       <Panel title="Integrations" badge={<Count value={integrations.length} />}>
+        <div className="mb-4 space-y-2 text-sm text-hud-muted">
+          {Object.entries(connections).map(([name, status]) => <p key={name}>{PROVIDER_LABELS[name] ?? name}: {status}</p>)}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { url } = await getGoogleAuthUrl();
+                window.location.assign(url);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not connect Google Calendar");
+              }
+            }}
+            className="rounded-md border border-hud-border px-3 py-2 text-hud-text hover:border-hud-accent"
+          >Connect Google Calendar</button>
+          <p>Set RAY_NOTION_TOKEN on the backend, share pages via Connections, then add a Notion integration below and Check it. Refresh this page after connecting.</p>
+        </div>
         <div className="mb-4 rounded-md border border-hud-border bg-hud-panel/50 p-4">
           <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-hud-muted">Add integration</h3>
           <form onSubmit={handleCreate} className="flex flex-col gap-3">

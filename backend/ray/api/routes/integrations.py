@@ -6,11 +6,42 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ray.db.session import get_session
+from ray.integrations.google_auth import GoogleAuthError, get_google_oauth
 from ray.schemas import IntegrationCheck, IntegrationCreate, IntegrationRead, IntegrationUpdate
 from ray.security.auth import get_current_user_id
 from ray.services import integration_service
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+oauth_callback_router = APIRouter(prefix="/integrations/google", tags=["integrations"])
+
+
+@router.get("/connections")
+async def connection_statuses(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    records = await integration_service.list_integrations(session, user_id)
+    return integration_service.connection_statuses(records)
+
+
+@router.get("/google/auth-url")
+async def google_auth_url(user_id: uuid.UUID = Depends(get_current_user_id)) -> dict[str, str]:
+    try:
+        return {"url": get_google_oauth().auth_url(str(user_id))}
+    except GoogleAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@oauth_callback_router.get("/callback")
+async def google_callback(
+    code: str = "", state: str = "", session: AsyncSession = Depends(get_session)
+) -> dict[str, str]:
+    try:
+        user_id = await get_google_oauth().callback(code, state)
+        await integration_service.google_connected(session, uuid.UUID(user_id))
+        return {"message": "Google Calendar connected. You can close this tab and return to Ray."}
+    except GoogleAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("", response_model=list[IntegrationRead])

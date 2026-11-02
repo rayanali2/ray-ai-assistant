@@ -75,6 +75,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    # Browser redirects cannot carry a bearer token; this route requires a
+    # single-use, expiring OAuth state plus PKCE instead.
+    app.include_router(integrations.oauth_callback_router)
 
     # Everything else is authenticated. Applying the dependency here rather than
     # per-route means a new router cannot accidentally ship unprotected

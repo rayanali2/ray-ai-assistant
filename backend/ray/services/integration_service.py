@@ -15,12 +15,14 @@ from typing import Any, cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ray.config import get_settings
 from ray.db.models import Integration
 from ray.domain.enums import IntegrationStatus, IntegrationType
 from ray.integrations.base import Adapter
 from ray.integrations.calendar import GoogleCalendarAdapter, LocalCalendarAdapter
 from ray.integrations.files import LocalFileAdapter
 from ray.integrations.github import GitHubAdapter
+from ray.integrations.google_auth import get_google_oauth
 from ray.integrations.knowledge import NotionAdapter, ObsidianAdapter
 from ray.schemas import (
     IntegrationCheck,
@@ -82,6 +84,8 @@ def build_adapter(integration: Integration | IntegrationAdapterConfig) -> Adapte
         return cast(Adapter, cls_any(allowed_paths=config.get("allowed_paths", [])))
     if integration.type is IntegrationType.CALENDAR and integration.provider == "local":
         return cast(Adapter, cls_any())
+    if integration.type is IntegrationType.CALENDAR and integration.provider == "google":
+        return cast(Adapter, cls_any(calendar_id=config.get("calendar_id", "primary")))
     return cast(Adapter, cls_any())
 
 
@@ -201,20 +205,72 @@ async def resolve_adapter(
     provider: str,
     fallback: IntegrationAdapterConfig | None = None,
 ) -> Adapter | None:
-    """Return the first enabled, connected adapter, or build a fallback config."""
+    """Resolve a provider, respecting explicit disablement before env fallbacks."""
     result = await session.execute(
         select(Integration)
         .where(
             Integration.user_id == user_id,
             Integration.type == type,
             Integration.provider == provider,
-            Integration.enabled == True,  # noqa: E712
         )
         .order_by(Integration.created_at.asc())
     )
     integration = result.scalars().first()
     if integration is not None:
-        return build_adapter(integration)
+        return build_adapter(integration) if integration.enabled else None
     if fallback is not None:
         return build_adapter(fallback)
     return None
+
+
+def connection_statuses(integrations: list[IntegrationRead] | None = None) -> dict[str, str]:
+    statuses = {
+        "google": get_google_oauth().status(),
+        "notion": "token configured (use Check to verify page access)"
+        if get_settings().notion_token
+        else "not configured: set RAY_NOTION_TOKEN",
+    }
+    for provider in statuses:
+        records = [item for item in integrations or [] if item.provider == provider]
+        if not records:
+            continue
+        enabled = next((item for item in records if item.enabled), None)
+        if enabled is None:
+            statuses[provider] = "disabled in Settings"
+        elif enabled.status is IntegrationStatus.ERROR:
+            statuses[provider] = f"error (last check): {enabled.last_error or 'Check connection'}"
+        elif provider == "notion" and enabled.status is IntegrationStatus.CONNECTED:
+            statuses[provider] = "connected (last check)"
+        elif provider == "notion" and enabled.credentials_reference:
+            statuses[provider] = "credentials reference configured (use Check to verify access)"
+    return statuses
+
+
+async def google_connected(session: AsyncSession, user_id: uuid.UUID) -> None:
+    integration = (
+        (
+            await session.execute(
+                select(Integration).where(
+                    Integration.user_id == user_id,
+                    Integration.type == IntegrationType.CALENDAR,
+                    Integration.provider == "google",
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if integration is None:
+        integration = Integration(
+            user_id=user_id,
+            type=IntegrationType.CALENDAR,
+            provider="google",
+            enabled=True,
+            config={},
+        )
+        session.add(integration)
+    integration.enabled = True
+    integration.status = IntegrationStatus.CONNECTED
+    integration.last_error = None
+    integration.last_sync = datetime.now(UTC)
+    await session.commit()

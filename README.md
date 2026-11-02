@@ -313,6 +313,66 @@ Embeddings run locally. Install the model backend with `uv sync --group embeddin
 (~2 GB of torch); without it Ray falls back to a dependency-free hashing embedder that
 matches on shared words rather than meaning ([ADR-0016](docs/adr/0016-embedding-backend-fallback.md)).
 
+### Google Calendar and Notion integrations
+
+Local calendar/ICS and Obsidian remain available without cloud credentials. Cloud
+reads go to the selected service; writes always require explicit approval in Ray,
+even if a tool has an "always allow" permission.
+
+**Google Calendar**
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/),
+   enable **Google Calendar API**, and configure the OAuth consent screen: choose
+   **External**, add yourself as a **test user** while the app is in testing.
+2. Create an OAuth client ID of type **Desktop app**. Set these values in the
+   checkout's gitignored `.env` (not in the HUD's credentials-reference field):
+   ```dotenv
+   RAY_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   RAY_GOOGLE_CLIENT_SECRET=your-client-secret
+   ```
+3. Restart Ray, then run **`./scripts/ray connect google`**, or open HUD
+   **Settings → Integrations → Connect Google Calendar**. Consent opens in your
+   browser and redirects to `http://127.0.0.1:8000/integrations/google/callback`.
+   Keep the local backend running during this step; return to Ray and refresh
+   Settings after the success message. Remote-only deployments are not supported
+   by this installed-app loopback flow.
+4. Ray requests only `https://www.googleapis.com/auth/calendar.events`, uses
+   single-use state and PKCE, and saves refresh/access tokens in
+   `~/.local/share/ray/google-calendar.json` with mode **0600** (override the data
+   directory with **`RAY_DATA_DIR`**). Tokens are not returned to the HUD or agents.
+   Access tokens refresh automatically. Re-run the connect command if access is
+   revoked; Google testing-mode refresh tokens can expire after seven days.
+
+Upcoming Google events appear beside local events in the dashboard schedule.
+The Planning agent has `google_calendar.list`, `.create`, `.update`, and `.delete`
+tools. The default calendar is `primary`; an integration's optional
+`config.calendar_id` selects another calendar. This is live access, not a
+background/bidirectional database sync. Google failures leave local events intact.
+To disconnect, revoke Ray in your Google account and remove its local token file;
+you can also disable the integration in Settings.
+
+**Notion**
+
+1. Visit [notion.so/profile/integrations](https://www.notion.so/profile/integrations),
+   create an **internal integration**, and give it read/insert/update capabilities.
+2. Set **`RAY_NOTION_TOKEN`** in `.env` to its internal integration secret and
+   restart Ray. For each target page/database, use **••• → Connections** to share
+   it with the integration. An API token alone does not grant page access.
+3. In **Settings → Integrations**, add **Knowledge → Notion**, then **Check**.
+   Leave the credentials reference empty to use `RAY_NOTION_TOKEN`, or supply an
+   environment-variable reference (never paste the secret into that field).
+4. Ask the Research agent to search/read shared pages/databases, create a page, or
+   append text. Tools are `notion.search`, `.read`, `.create`, and `.append`.
+   Creation takes a parent page/database ID; for a database, provide its title
+   column name with `title_property` (default `Name`). Database templates/required
+   custom properties are not inferred. Reading converts paginated/nested blocks
+   to Markdown; writes insert plain-text paragraphs, not a Markdown parser.
+
+Notion uses API version `2022-06-28`, follows pagination, and honors `Retry-After`
+on 429s with bounded retries. Long throttling reports an error rather than hanging.
+`ray doctor`, `/health` diagnostics, and HUD Settings expose local configuration
+status; **Check** verifies live credentials/access. No credentials are bundled.
+
 ### Health, export, and releases
 
 * `GET /health` returns a compact diagnostics map (database, LLM, voice, integrations).
