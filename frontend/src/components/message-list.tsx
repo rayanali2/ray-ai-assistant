@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AgentTrace } from "@/components/agent-trace";
 import { Markdown } from "@/components/markdown";
 import type { ChatMessage } from "@/hooks/use-chat";
+import { greeting } from "@/lib/hud";
+import { useDashboard } from "@/components/dashboard-context";
 
 export function MessageList({
   messages,
@@ -17,6 +19,14 @@ export function MessageList({
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastContent = messages[messages.length - 1]?.content;
+  const { health } = useDashboard();
+  const [hour, setHour] = useState<number | null>(null);
+  useEffect(() => {
+    const update = () => setHour(new Date().getHours());
+    update();
+    const timer = setInterval(update, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Follow the stream, but only while the user is already at the bottom, so
   // scrolling up to read is not fought by every token.
@@ -29,18 +39,16 @@ export function MessageList({
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
-        <p className="text-2xl font-light text-hud-text">Good to see you, {userName}.</p>
-        <p className="max-w-md text-sm text-hud-muted">
-          Ask me anything, or say &ldquo;Ray&rdquo; once voice is armed. I&apos;ll show you which
-          agent answered and what it used.
-        </p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 pb-5 text-center">
+        <p className="hud-heading text-2xl font-light text-hud-text">{hour === null ? `Welcome, ${userName}.` : greeting(hour, userName)}</p>
+        <p className="max-w-md text-sm text-hud-muted">{health?.status === "ok" ? "All systems nominal. At your service." : "Backend uplink unavailable. Standing by."}</p>
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[.18em] text-hud-muted">Type a request below · or activate voice</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
       {messages.map((message) => (
         <article
           key={message.id}

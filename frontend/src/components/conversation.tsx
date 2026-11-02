@@ -8,6 +8,7 @@ import { MessageList } from "@/components/message-list";
 import { Reactor, type ReactorState } from "@/components/reactor";
 import { VoiceControl } from "@/components/voice-control";
 import { useChat } from "@/hooks/use-chat";
+import { useAudioLevel } from "@/hooks/use-audio-level";
 import { useDesktopListen } from "@/hooks/use-desktop-listen";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard";
 import { useVoice } from "@/hooks/use-voice";
@@ -78,6 +79,7 @@ export function Conversation({
 
   const reactorState: ReactorState =
     pendingApprovals > 0 ? "approval" : voice.state;
+  const level = useAudioLevel(voice.state, voice.micStream, voice.playbackAudio);
 
   useKeyboardShortcuts({
     onFocus: () => composerRef.current?.focus(),
@@ -88,8 +90,7 @@ export function Conversation({
   const provider = health?.llm_provider ?? "offline";
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-hud-border bg-hud-panel/60">
-      <Reactor state={reactorState} className="absolute inset-0 z-0 opacity-40" />
+    <section className="hud-frame conversation-surface relative flex min-h-0 flex-1 flex-col overflow-hidden border border-hud-border bg-hud-panel/60">
 
       <header className="relative z-10 flex items-center justify-between gap-3 border-b border-hud-border px-5 py-3">
         <div className="flex items-center gap-3">
@@ -109,7 +110,13 @@ export function Conversation({
         <VoiceControl capabilities={health?.voice ?? null} voice={voice} />
       </header>
 
-      <div className="relative z-10 min-h-0 flex-1">
+      <div className={`reactor-stage ${chat.messages.length > 0 ? "reactor-stage-compact" : ""}`}>
+        <div className="reactor-readout" aria-hidden="true"><span>NEURAL INTERFACE</span><strong>R.A.Y.</strong><span>PERSONAL INTELLIGENCE</span></div>
+        <Reactor state={chat.sending && reactorState === "idle" ? "thinking" : reactorState} level={level} />
+        <div className="reactor-readout text-right" aria-hidden="true"><span>VOICE LINK</span><strong>{voice.localReady ? "LOCAL" : "BROWSER"}</strong><span>{Math.round(level * 100).toString().padStart(3, "0")} / INPUT LEVEL</span></div>
+      </div>
+
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <MessageList messages={chat.messages} userName={userName} onRetry={chat.retry} />
       </div>
 
