@@ -140,6 +140,28 @@ async def test_registry_skips_all_cooled_models_and_explains_mock(
     assert registry.active_provider == registry.answering_provider == "gemini"
 
 
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_router_mock_output_is_unchanged_during_gemini_cooldown(scripted, streaming):
+    provider, calls, _ = scripted({"primary": [[quota()]]}, fallback_models="")
+    registry = ProviderRegistry(
+        Settings(_env_file=None, llm_provider="gemini", llm_fallback_provider="mock")
+    )
+    registry.register("gemini", provider)
+    structured = '{"agents": ["executive"]}'
+    registry.register("mock", FakeProvider(name="mock", chunks=[structured]))
+    assert "daily quota used up" in (await registry.complete(REQUEST)).text
+    assert provider.cooldown_detail()
+
+    if streaming:
+        text = "".join([chunk.text async for chunk in registry.stream(REQUEST, role="router")])
+    else:
+        text = (await registry.complete(REQUEST, role="router")).text
+
+    assert text == structured
+    assert json.loads(text) == {"agents": ["executive"]}
+    assert calls == ["primary"]
+
+
 async def test_stream_switches_models_before_output_but_never_midstream(scripted):
     provider, calls, _ = scripted(
         {"primary": [[quota()]], "lite": [["hello", quota("PerMinute retry in 3s")]]}

@@ -179,8 +179,8 @@ class ProviderRegistry:
         for provider in self._available(self.chain(role), on_degrade):
             try:
                 completion = await provider.complete(request)
-                completion.text = self._mock_notice(provider) + completion.text
                 if role == "agent":
+                    completion.text = self._mock_notice(provider) + completion.text
                     self.active_provider = completion.provider
                     self._answering_provider.set(completion.provider)
                 return completion
@@ -208,7 +208,7 @@ class ProviderRegistry:
             started = False
             try:
                 async for chunk in provider.stream(request):
-                    if not started:
+                    if role == "agent" and not started:
                         notice = self._mock_notice(provider)
                         if notice:
                             yield Chunk(text=notice)
