@@ -1,0 +1,44 @@
+{
+  "name": "ray-desktop",
+  "productName": "Ray",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ray personal assistant desktop shell",
+  "author": "Ray contributors",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "dist:mac": "electron-builder --mac dmg zip --arm64 --x64",
+    "dist:linux": "electron-builder --linux AppImage --x64"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "build": {
+    "appId": "ai.ray.assistant",
+    "productName": "Ray",
+    "directories": { "output": "dist" },
+    "files": ["*.cjs", "ui/**", "!test/**"],
+    "extraResources": [
+      { "from": "../scripts/install.sh", "to": "install.sh" },
+      { "from": "../macos/Ray.app/Contents/Resources/icon.png", "to": "icon.png" }
+    ],
+    "mac": {
+      "identity": null,
+      "category": "public.app-category.productivity",
+      "icon": "../macos/Ray.app/Contents/Resources/icon.png",
+      "artifactName": "Ray-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Ray uses your microphone for voice requests and local speech recognition."
+      }
+    },
+    "linux": {
+      "category": "Utility",
+      "icon": "../macos/Ray.app/Contents/Resources/icon.png",
+      "artifactName": "Ray-${version}-${arch}.${ext}"
+    }
+  }
+}

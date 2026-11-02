@@ -144,7 +144,51 @@ Open http://localhost:3000 and the dashboard shows the seeded project, tasks, sc
 memories, agents, and workflows. Control the running services with `status`, `stop`, and `logs`.
 Run `./scripts/ray doctor` to verify your local setup.
 
-### macOS app bundle
+### Install the Mac app
+
+Download the matching **arm64** (Apple Silicon) or **x64** (Intel) `.dmg` from
+GitHub **Releases**, or the **Ray-macOS** artifact in the **Desktop** Actions workflow.
+Open the disk image and drag **Ray.app** to **Applications**.
+
+The app is currently unsigned: right-click → **Open** on first launch. If macOS
+still quarantines the downloaded app, after verifying its source run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Ray.app
+```
+
+Docker Desktop is required, alongside Git, Node.js, pnpm and uv. Ray starts Docker
+Desktop if needed. The desktop download is a native Electron window, not a bundled
+database or Python/Node runtime for the services; it manages a separate checkout.
+On launch Ray checks `RAY_HOME`, then `~/Library/Application Support/Ray/config.json`
+(`repoPath`), then `~/ray-ai-assistant` and `~/Ray`. If none exists, choose an existing
+folder containing `scripts/ray` or click **Install Ray** to run the existing installer
+into `~/ray-ai-assistant`. Installation output is displayed in the window.
+
+The tray and normal application menu offer Show, Start/Stop/Restart, logs, doctor
+and Preferences (change checkout). **Cmd+Shift+Space** focuses Ray and invokes the
+same action as the microphone button; local voice must be configured if Electron
+does not provide browser speech recognition. **Cmd+Q** quits the app **without
+stopping services**; choose **Quit and stop services** for an explicit shutdown.
+Stop uses `scripts/ray stop`: backend/frontend stop, but the PostgreSQL container
+remains running. Closing the main window hides it to the tray. Window bounds and
+checkout choice are remembered; `RAY_HOME` overrides the saved checkout on launch.
+Switching checkouts asks before stopping the previous checkout's services.
+Logs live in `~/Library/Application Support/Ray/logs` (service logs in `<checkout>/.ray`).
+
+To build locally on macOS:
+
+```sh
+cd desktop
+pnpm install
+pnpm dist:mac  # unsigned DMG + ZIP, arm64 and x64, in desktop/dist/
+```
+
+Linux verification: `cd desktop && pnpm install && pnpm dist:linux`, then run the
+AppImage (or `pnpm dev`). Linux uses Ctrl+Shift+Space and stores desktop config/logs
+under `~/.config/Ray`. No auto-update, signing or notarization is configured yet.
+
+### Lightweight macOS launcher alternative
 
 The `.app` wrapper is built after you have run the terminal quickstart once:
 

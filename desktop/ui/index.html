@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ray</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <header><span>RAY / PERSONAL INTELLIGENCE</span><button id="close" aria-label="Hide window">×</button></header>
+  <main>
+    <svg class="reactor" viewBox="0 0 240 240" aria-hidden="true">
+      <circle cx="120" cy="120" r="109" class="ticks"/>
+      <circle cx="120" cy="120" r="93" class="outer"/>
+      <circle cx="120" cy="120" r="77" class="inner"/>
+      <circle cx="120" cy="120" r="52" class="core"/>
+      <path d="M120 88l28 49H92z"/>
+    </svg>
+    <div class="eyebrow">NEURAL INTERFACE / DESKTOP</div>
+    <h1 id="message">Initializing Ray…</h1>
+    <p id="hint">Connecting your local intelligence systems.</p>
+    <div class="actions">
+      <button id="choose" data-action="choose">Choose existing folder…</button>
+      <button id="install" data-action="install">Install Ray</button>
+      <button id="retry" data-action="retry">Retry</button>
+      <button id="doctor" data-action="doctor">Run doctor</button>
+      <button id="logs" data-action="logs">Open logs</button>
+    </div>
+    <pre id="output" role="log" aria-label="Startup and diagnostic logs"></pre>
+    <footer>LOCAL FIRST · AT YOUR SERVICE</footer>
+  </main>
+</body>
+</html>
