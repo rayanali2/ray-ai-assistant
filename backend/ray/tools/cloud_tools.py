@@ -175,7 +175,8 @@ CLOUD_TOOLS = (
     _tool(
         "notion",
         "append",
-        "Append text to a Notion page",
+        "Request approval to append text to an existing Notion page. Calling this tool "
+        "queues a pending approval; no content is written until the user approves in Ray.",
         {"page_id": _TEXT, "content": _TEXT},
         ["page_id", "content"],
         write=True,
