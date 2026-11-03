@@ -73,7 +73,9 @@ async def test_google_pkce_state_exchange_and_private_storage(oauth):
             await oauth.callback("authorization-code", state)
 
 
-async def test_google_missing_config_denial_expiry_and_missing_refresh(oauth):
+async def test_google_missing_config_denial_expiry_and_missing_refresh(oauth, monkeypatch):
+    monkeypatch.delenv("RAY_GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("RAY_GOOGLE_CLIENT_SECRET", raising=False)
     empty = GoogleOAuth(Settings(_env_file=None, data_dir=oauth.path.parent))
     assert "not configured" in empty.status()
     with pytest.raises(GoogleAuthError, match="not configured"):
